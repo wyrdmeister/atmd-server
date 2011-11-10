@@ -1,14 +1,13 @@
 /* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 4; tab-width: 4 -*- */
 /*
- * main.cpp
- * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
+ * Copyright (C) Michele Devetta 2011 <michele.devetta@unimi.it>
  *
- * main.cc is free software: you can redistribute it and/or modify it
+ * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * main.cc is distributed in the hope that it will be useful, but
+ * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -29,65 +28,106 @@ bool terminate_interrupt;
 // Global debug flag
 bool enable_debug = false;
 
+// Global RT_TASK objects
+RT_TASK main_task;
+RT_TASK meas_task;
 
-/* @fn signal_handler(int signal)
- * Signal handler for SIGHUP for server termination.
- *
- * @param signal Signal number. Should be always SIGHUP.
- */
-void signal_handler(int signal) {
-	struct sigaction handler;
-	handler.sa_flags = 0;
-	sigemptyset(&handler.sa_mask);
-	handler.sa_handler = &(signal_handler);
-	if(signal == SIGHUP) {
-		sigaction(SIGHUP, &handler, NULL);
-		terminate_interrupt = true;
-	}
-}
+// Watchdog alarm
+RT_ALARM watchdog;
 
-/* @fn bad_handler(int signal)
- * Signal handler for all signals that can be catched that termiante the process.
+
+#define SIGDEBUG_UNDEFINED			0
+#define SIGDEBUG_MIGRATE_SIGNAL		1
+#define SIGDEBUG_MIGRATE_SYSCALL	2
+#define SIGDEBUG_MIGRATE_FAULT		3
+#define SIGDEBUG_MIGRATE_PRIOINV	4
+#define SIGDEBUG_NOMLOCK			5
+#define SIGDEBUG_WATCHDOG			6
+
+// Array of reasons to get SIGDEBUG (or SIGXCPU)
+static const char *reason_str[] = {
+    "undefined",
+    "received signal",
+    "invoked syscall",
+    "triggered fault",
+    "affected by priority inversion",
+    "missing mlockall",
+    "runaway thread",
+};
+
+
+/* @fn gen_handler(int signal)
+ * Signal handler
  *
  * @param signal Signal number.
  */
-void bad_handler(int signal) {
-	switch(signal) {
-		case SIGINT:
-			syslog(ATMD_CRIT, "Received signal SIGINT. Terminating.");
-			break;
-		case SIGQUIT:
-			syslog(ATMD_CRIT, "Received signal SIGQUIT. Terminating.");
-			break;
-		case SIGILL:
-			syslog(ATMD_CRIT, "Received signal SIGILL. Terminating.");
-			break;
-		case SIGABRT:
-			syslog(ATMD_CRIT, "Received signal SIGABRT. Terminating.");
-			break;
-		case SIGFPE:
-			syslog(ATMD_CRIT, "Received signal SIGFPE. Terminating.");
-			break;
-		case SIGSEGV:
-			syslog(ATMD_CRIT, "Received signal SIGSEGV. Terminating.");
-			break;
-		case SIGPIPE:
-			syslog(ATMD_CRIT, "Received signal SIGPIPE. Terminating.");
-			break;
-		case SIGTERM:
-			syslog(ATMD_CRIT, "Received signal SIGTERM. Terminating.");
-			break;
-		case SIGUSR1:
-			syslog(ATMD_CRIT, "Received signal SIGUSR1. Terminating.");
-			break;
-		case SIGUSR2:
-			syslog(ATMD_CRIT, "Received signal SIGUSR2. Terminating.");
-			break;
-		default:
-			syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
-			break;
+void gen_handler(int signal, siginfo_t *si, void* context) {
+	if(signal == SIGHUP) {
+		terminate_interrupt = true;
+
+	} else if(signal == SIGXCPU || signal == SIGDEBUG) {
+		// These two signal should be ignored as they are sent
+		// every time a task switch to secondary mode
+		unsigned int reason = si->si_value.sival_int;
+		void *bt[32];
+		int nentries;
+		ucontext_t *uc = (ucontext_t *)context;
+
+		// Log SIGDEBUG
+		syslog(ATMD_WARN, "\nSIGDEBUG received, reason %d: %s\n", reason, reason <= SIGDEBUG_WATCHDOG ? reason_str[reason] : "<unknown>");
+
+		nentries = backtrace(bt,32);
+		// overwrite sigaction with caller's address
+#if defined(__i386__)
+		bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+#elif defined(__x86_64__)
+		bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
+#endif
+		char ** messages = backtrace_symbols(bt, nentries);
+
+		// Print backtrace
+		for(int i = 1; i < nentries; i++)
+			syslog(ATMD_INFO, "[BT] %s#", messages[i]);
+
+	} else {
+		switch(signal) {
+			case SIGINT:
+				syslog(ATMD_CRIT, "Received signal SIGINT. Terminating.");
+				break;
+			case SIGQUIT:
+				syslog(ATMD_CRIT, "Received signal SIGQUIT. Terminating.");
+				break;
+			case SIGILL:
+				syslog(ATMD_CRIT, "Received signal SIGILL. Terminating.");
+				break;
+			case SIGABRT:
+				syslog(ATMD_CRIT, "Received signal SIGABRT. Terminating.");
+				break;
+			case SIGFPE:
+				syslog(ATMD_CRIT, "Received signal SIGFPE. Terminating.");
+				break;
+			case SIGSEGV:
+				syslog(ATMD_CRIT, "Received signal SIGSEGV. Terminating.");
+				break;
+			case SIGPIPE:
+				syslog(ATMD_CRIT, "Received signal SIGPIPE. Terminating.");
+				break;
+			case SIGTERM:
+				syslog(ATMD_CRIT, "Received signal SIGTERM. Terminating.");
+				break;
+			case SIGUSR1:
+				syslog(ATMD_CRIT, "Received signal SIGUSR1. Terminating.");
+				break;
+			case SIGUSR2:
+				syslog(ATMD_CRIT, "Received signal SIGUSR2. Terminating.");
+				break;
+			default:
+				syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
+				break;
+		}
+
+		exit(signal);
 	}
-	exit(signal);
 }
 
 
@@ -102,28 +142,29 @@ int main(int argc, char * const argv[])
 
 	// Configuration of signal handler for SIGHUP (server termination)
 	struct sigaction handler;
-	handler.sa_flags = 0;
 	sigemptyset(&handler.sa_mask);
-	handler.sa_handler = &(signal_handler);
-	// Signal for the termination of the process
+	handler.sa_flags = SA_SIGINFO;
+	handler.sa_sigaction = gen_handler;
+
+	// Catch SIGHUP for the termination of the process
 	sigaction(SIGHUP, &handler, NULL);
 
-	// We catch some bad signals to log them...
-	struct sigaction bad_h;
-	bad_h.sa_flags = 0;
-	sigemptyset(&bad_h.sa_mask);
-	bad_h.sa_handler = &(bad_handler);
-	sigaction(SIGINT, &bad_h, NULL);
-	sigaction(SIGQUIT, &bad_h, NULL);
-	sigaction(SIGILL, &bad_h, NULL);
-	sigaction(SIGABRT, &bad_h, NULL);
-	sigaction(SIGFPE, &bad_h, NULL);
-	sigaction(SIGSEGV, &bad_h, NULL);
-	sigaction(SIGPIPE, &bad_h, NULL);
-	sigaction(SIGTERM, &bad_h, NULL);
-	sigaction(SIGUSR1, &bad_h, NULL);
-	sigaction(SIGUSR2, &bad_h, NULL);
-	sigaction(SIGALRM, &bad_h, NULL);
+	// Catch SIGXCPU and SIGDEBUG
+	sigaction(SIGXCPU, &handler, NULL);
+	sigaction(SIGDEBUG, &handler, NULL);
+
+	// Catch some bad signals to log them...
+	sigaction(SIGINT, &handler, NULL);
+	sigaction(SIGQUIT, &handler, NULL);
+	sigaction(SIGILL, &handler, NULL);
+	sigaction(SIGABRT, &handler, NULL);
+	sigaction(SIGFPE, &handler, NULL);
+	sigaction(SIGSEGV, &handler, NULL);
+	sigaction(SIGPIPE, &handler, NULL);
+	sigaction(SIGTERM, &handler, NULL);
+	sigaction(SIGUSR1, &handler, NULL);
+	sigaction(SIGUSR2, &handler, NULL);
+	sigaction(SIGALRM, &handler, NULL);
 
 
 	// Handling of command line parameters through getopt
@@ -292,19 +333,18 @@ int main(int argc, char * const argv[])
 				}
 
 				if(netif.get_command(command) == 0) {
-					// We have received a command
+					// Received a command
 
 					if(enable_debug)
-						// We log commands for debugging purposes
+						// If debug is eanbled, we log all commands received
 						syslog(ATMD_DEBUG, "Received command \"%s\"", command.c_str());
 
-					// Execution of the command
+					// Command execution
 					netif.exec_command(command, board);
 				}
 
 				if(board.get_autostart() != ATMD_AUTOSTART_DISABLED) {
 					// If autostart is enable we shoud do some more things...
-					int retval = 0;
 					switch(board.get_status()) {
 						case ATMD_STATUS_IDLE:
 						case ATMD_STATUS_FINISHED:
@@ -312,10 +352,10 @@ int main(int argc, char * const argv[])
 							break;
 
 						case ATMD_STATUS_ERROR:
-							board.collect_measure(retval);
-							if(retval == ATMD_ERR_EMPTY) {
-								// In case of empty measurement we can continue (of course we cannot the previous measurement)
-								if(board.measure_autorestart(retval)) {
+							board.collect_measure();
+							if(board.retval() == ATMD_ERR_EMPTY) {
+								// In case of empty measurement we can continue (of course we cannot save the previous measurement)
+								if(board.measure_autorestart(board.retval())) {
 									// Autorestart failed... nothing to do because everything should have been done inside measure_autorestart.
 								}
 
@@ -346,15 +386,16 @@ int main(int argc, char * const argv[])
 				break;
 
 		} catch(exception& e) {
-			syslog(ATMD_ERR, "main.cpp: caught an unexpected exception (%s)", e.what());
+			syslog(ATMD_ERR, "main.cpp: caught an unexpected exception (%s).", e.what());
 			break;
 
 		} catch(...) {
-			syslog(ATMD_ERR, "Network [get_command]: unhandled unknown exception");
+			syslog(ATMD_ERR, "Network [get_command]: unknown exception.");
 			break;
 		}
 	}
 
+	// CURL library cleanup
 	curl_global_cleanup();
 
 	syslog(ATMD_INFO, "Terminating atmd-server version %s.", VERSION);

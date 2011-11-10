@@ -1,14 +1,13 @@
 /* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 4; tab-width: 4 -*- */
 /*
- * atmd_network.cpp
- * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
+ * Copyright (C) Michele Devetta 2011 <michele.devetta@unimi.it>
  *
- * main.cc is free software: you can redistribute it and/or modify it
+ * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * main.cc is distributed in the hope that it will be useful, but
+ * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -29,8 +28,8 @@ extern bool enable_debug;
 Network::Network() {
 	address = ATMD_DEF_LISTEN;
 	port = ATMD_DEF_PORT;
-	listen_socket = NULL;
-	client_socket = NULL;
+	listen_socket = 0;
+	client_socket = 0;
 	valid_commands.clear();
 
 	// Valid commands - ATMD protocol version 2.0
@@ -42,30 +41,30 @@ Network::Network() {
 
 
 /* @fn Network::init()
- * This function initialize the server network interface. It create the listening
- * socket, bind to it and begin to listen.
+ * This function initializes the server network interface. It creates the listening
+ * socket, binds to it and begins to listen.
  *
- * @return Return 0 on success, throw an exception on error.
+ * @return Returns 0 on success, throws an exception on error.
  */
 int Network::init() {
 
-	// Create AF_INET socket
+	// Creation of an AF_INET socket
 	if( (this->listen_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
 		// Failed to create the socket
 		syslog(ATMD_ERR, "Network [init]: failed to create listening socket (Error: %m).");
 		throw(ATMD_ERR_SOCK);
 	}
 
-	// We configure the listening socket for non blocking I/O
+	// Configuration the listening socket for non blocking I/O
 	if(fcntl(this->listen_socket, F_SETFL, O_NONBLOCK) == -1) {
 		// Failed to set socket flags
 		syslog(ATMD_ERR, "Network [init]: failed to set socket flag O_NONBLOCK (Error: %m).");
 		close(this->listen_socket);
-		this->listen_socket = NULL;
+		this->listen_socket = 0;
 		throw(ATMD_ERR_SOCK);
 	}
 
-	// Initialize local address structure
+	// Initialization of the local address structure
 	struct sockaddr_in bind_address;
 	memset(&bind_address, 0, sizeof(struct sockaddr_in));
 	bind_address.sin_family = AF_INET;
@@ -73,25 +72,25 @@ int Network::init() {
 	if( !inet_aton(this->address.c_str(), &(bind_address.sin_addr)) ) {
 		syslog(ATMD_ERR, "Network [init]: failed to convert ip address (%s).", this->address.c_str());
 		close(this->listen_socket);
-		this->listen_socket = NULL;
+		this->listen_socket = 0;
 		throw(ATMD_ERR_LISTEN);
 	}
 
-	// Binding socket to local address
+	// Binding of the socket to the local address
 	if(bind(this->listen_socket, (struct sockaddr *) &bind_address, sizeof(bind_address)) == -1) {
 		// Binding failed
 		syslog(ATMD_ERR, "Network [init]: failed binding to address %s (Error: %m).", this->address.c_str());
 		close(this->listen_socket);
-		this->listen_socket = NULL;
+		this->listen_socket = 0;
 		throw(ATMD_ERR_LISTEN);
 	}
 
-	// Setting socket in listening state
+	// Start to listen
 	if(listen(this->listen_socket, 1) == -1) {
 		// Listen failed
 		syslog(ATMD_ERR, "Network [init]: failed listening on address %s (Error: %m).", this->address.c_str());
 		close(this->listen_socket);
-		this->listen_socket = NULL;
+		this->listen_socket = 0;
 		throw(ATMD_ERR_LISTEN);
 	}
 
@@ -101,7 +100,7 @@ int Network::init() {
 
 
 /* @fn Network::accept_client()
- * This function loops waiting for a connection. In the meantime check for the
+ * This function loops waiting for a connection. In the meantime checks for the
  * terminate interrupt.
  *
  * @return Return 0 on success, -1 on error (or terminate interrupt).
@@ -111,14 +110,14 @@ int Network::accept_client() {
 	struct sockaddr_in client_addr;
 	socklen_t client_addr_length = sizeof(client_addr);
 
-	// Set 25ms sleep between accept tries
+	// We set 25ms sleep between accept tries
 	struct timespec sleeptime;
 	sleeptime.tv_sec = 0;
 	sleeptime.tv_nsec = 25000000;
 
-	// Cycle until a valid connection is recieved or the terminate_interrupt is set.
+	// We cycle until a valid connection is recieved or the terminate_interrupt is set.
 	while(!connection_ok && !terminate_interrupt) {
-		// Accept a connection
+		// We accept a connection
 		this->client_socket = accept(this->listen_socket, (struct sockaddr *)&client_addr, &client_addr_length);
 
 		if(this->client_socket == -1) {
@@ -251,9 +250,9 @@ int Network::send_command(string command) {
 				} else if (errno == EAGAIN || errno == EINTR) {
 					continue;
 				}
-				syslog(ATMD_ERR, "Network [send_command]: send failed with error \"%m\".");
+				syslog(ATMD_ERR, "Network [send_command]: 'send' failed with error \"%m\".");
 			} else {
-				syslog(ATMD_ERR, "Network [send_command]: send failed with a return value of %d (lenght of sent data %d).", retval, remaining);
+				syslog(ATMD_ERR, "Network [send_command]: 'send' failed with a return value of %d (lenght of data %d).", retval, remaining);
 			}
 			throw(ATMD_ERR_SEND);
 		}
@@ -391,8 +390,8 @@ int Network::exec_command(string command, ATMDboard& board) {
 	pcrecpp::RE cmd_re("");
 
 	// Data variables
-	uint32_t channel, rising, falling, refclkdiv, hsdiv, offset, measure_num, format;
-	string window_time, measure_time, filename, win_start, win_ampl, ftp_data;
+	uint32_t channel, rising, falling, refclkdiv, hsdiv, offset, measure_num, format, max_ev, bnport;
+	string window_time, measure_time, filename, win_start, win_ampl, ftp_data, bnhost;
 
 	// Configuration SET commands
 	if(main_command == "SET") {
@@ -567,6 +566,45 @@ int Network::exec_command(string command, ATMDboard& board) {
 			return 0;
 		}
 
+		// Set maximum number of events per start
+		cmd_re = "MAXEV (\\d+)";
+
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &max_ev);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting maximum number of events per start to %d.", max_ev);
+
+			board.set_max_ev(max_ev);
+			this->send_command("ACK");
+			return 0;
+		}
+
+		// Set host 
+		cmd_re = "BNHOST (\\d+\\.\\d+\\.\\d+\\.\\d+)";
+
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &bnhost);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting bunch number host IP to %s.", bnhost.c_str());
+
+			board.set_bnhost(bnhost);
+			this->send_command("ACK");
+			return 0;
+		}
+
+		// Set maximum number of events per start
+		cmd_re = "BNPORT (\\d+)";
+
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &bnport);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting bunch number host port to %d.", bnport);
+
+			board.set_bnport(bnport);
+			this->send_command("ACK");
+			return 0;
+		}
+
 		this->send_command(this->format_command("ERR %d", ATMD_NETERR_BAD_PARAM));
 		return 0;
 
@@ -604,7 +642,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured window time.");
 
 			string answer = "VAL ST ";
-			answer += board.get_window();
+			answer += board.get_window().get();
 			this->send_command(answer);
 			return 0;
 		}
@@ -615,7 +653,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured total measure time.");
 
 			string answer = "VAL TT ";
-			answer += board.get_tottime();
+			answer += board.get_tottime().get();
 			this->send_command(answer);
 			return 0;
 		}
@@ -701,6 +739,33 @@ int Network::exec_command(string command, ATMDboard& board) {
 			return 0;
 		}
 
+		// Get max events per start
+		if(parameters == "MAXEV") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested maximim number of events per start.");
+
+			this->send_command(this->format_command("VAL MAXEV %d", board.get_max_ev()));
+			return 0;
+		}
+
+		// Get configured IP for bunch number
+		if(parameters == "BNHOST") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested the configured IP for bunch number host.");
+
+			this->send_command(this->format_command("VAL BNHOST %s", board.get_bnhost().c_str()));
+			return 0;
+		}
+
+		// Get configured port for bunch number
+		if(parameters == "BNPORT") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested the configured port for bunch number host.");
+
+			this->send_command(this->format_command("VAL BNPORT %d", board.get_bnport()));
+			return 0;
+		}
+
 		this->send_command(this->format_command("ERR %d", ATMD_NETERR_BAD_PARAM));
 		return 0;
 
@@ -714,10 +779,9 @@ int Network::exec_command(string command, ATMDboard& board) {
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested to start a measure.");
 
 			if(board.get_autostart() == ATMD_AUTOSTART_DISABLED) {
-				int retval;
 				switch(board.get_status()) {
 					case ATMD_STATUS_FINISHED:
-						if(board.collect_measure(retval)) {
+						if(board.collect_measure()) {
 							this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
 							break;
 						}
@@ -766,7 +830,6 @@ int Network::exec_command(string command, ATMDboard& board) {
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested to stop current measure.");
 
-			int retval;
 			switch(board.get_status()) {
 				// There is no measure to stop
 				case ATMD_STATUS_FINISHED:
@@ -774,7 +837,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
 						board.set_autostart(ATMD_AUTOSTART_STOP);
 
-					if(board.collect_measure(retval)) {
+					if(board.collect_measure()) {
 						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
 						break;
 					}
@@ -821,14 +884,13 @@ int Network::exec_command(string command, ATMDboard& board) {
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested to abort current measure.");
 
-			int retval;
 			switch(board.get_status()) {
 				// There is no measure to abort
 				case ATMD_STATUS_FINISHED:
 					// If autostart is enabled and the measurement is already finished we set to stop to save the last measurement
 					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
 						board.set_autostart(ATMD_AUTOSTART_STOP);
-					if(board.collect_measure(retval)) {
+					if(board.collect_measure()) {
 						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
 						break;
 					}
@@ -872,7 +934,6 @@ int Network::exec_command(string command, ATMDboard& board) {
 		// Get measure status
 		if(parameters == "STATUS") {
 			string command = "MSR STATUS ";
-			int retval;
 			switch(board.get_status()) {
 				case ATMD_STATUS_STARTING:
 				case ATMD_STATUS_RUNNING:
@@ -884,15 +945,15 @@ int Network::exec_command(string command, ATMDboard& board) {
 					break;
 
 				case ATMD_STATUS_ERROR:
-					if(board.collect_measure(retval)) {
+					if(board.collect_measure()) {
 						this->send_command(command.append("ERR 0"));
 					} else {
-						this->send_command(this->format_command(command.append("ERR %d"), retval));
+						this->send_command(this->format_command(command.append("ERR %d"), board.retval()));
 					}
 					break;
 
 				case ATMD_STATUS_FINISHED:
-					if(board.collect_measure(retval)) {
+					if(board.collect_measure()) {
 						this->send_command(command.append("ERR 0"));
 					} else {
 						this->send_command(command.append("FINISHED"));
@@ -911,11 +972,10 @@ int Network::exec_command(string command, ATMDboard& board) {
 		// List measures command
 		if(parameters == "LST" || parameters == "LIST") {
 			if(enable_debug)
-				syslog(ATMD_DEBUG, "Network [exec_command]: client requested the list of unsaved measures. List contained %u measures.", board.num_measures());
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested the list of unsaved measures. List contained %lu measures.", board.num_measures());
 			if(board.num_measures() > 0) {
 				this->send_command(this->format_command("MSR LST NUM %u", board.num_measures()));
-				int i;
-				for(i = 0; i < board.num_measures(); i++) {
+				for(size_t i = 0; i < board.num_measures(); i++) {
 					uint32_t starts;
 					if(board.stat_measure(i, starts)) {
 						this->send_command(this->format_command("MSR LST %u ERR", i));
@@ -1047,10 +1107,9 @@ int Network::exec_command(string command, ATMDboard& board) {
 				return 0;
 			}
 
-			int retval;
 			switch(board.get_status()) {
 				case ATMD_STATUS_FINISHED:
-					if(board.collect_measure(retval)) {
+					if(board.collect_measure()) {
 						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
 						break;
 					}
@@ -1111,12 +1170,11 @@ int Network::exec_command(string command, ATMDboard& board) {
 	} else if(main_command == "EXT") {
 		// Terminate client session
 		// As first thing, we need to check the board status and eventually stop a running measure.
-		int retval;
 		switch(board.get_status()) {
 			// There is no measure to abort
 			case ATMD_STATUS_FINISHED:
 			case ATMD_STATUS_ERROR:
-				board.collect_measure(retval);
+				board.collect_measure();
 				break;
 
 			case ATMD_STATUS_RUNNING:

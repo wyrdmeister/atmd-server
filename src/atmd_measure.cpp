@@ -1,14 +1,13 @@
 /* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 4; tab-width: 4 -*- */
 /*
- * atmd_measure.cpp
- * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
+ * Copyright (C) Michele Devetta 2011 <michele.devetta@unimi.it>
  *
- * main.cc is free software: you can redistribute it and/or modify it
+ * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * main.cc is distributed in the hope that it will be useful, but
+ * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -22,33 +21,33 @@
 /* @fn StartData::add_event(uint32_t retrig, uint32_t stop, int8_t ch)
  * Add a stop to a StartData object.
  *
- * @param retring The retring count of the event to add
+ * @param retrig The retring count of the event to add
  * @param stop The stop count of the event to add
  * @param ch The channel of the event to add
  * @return Return 0 on success, -1 on error.
  */
-int StartData::add_event(uint32_t retrig, uint32_t stop, int8_t ch) {
-	try {
-		// We check only retrig_count array because all arrays grow together at the same time
-		if(this->retrig_count.size() <= this->retrig_count.capacity()) {
-			// Allocation of arrays
-			this->retrig_count.reserve(this->retrig_count.size()+this->block_size);
-			this->stoptime.reserve(this->stoptime.size()+this->block_size);
-			this->channel.reserve(this->channel.size()+this->block_size);
-
-			// We update block size
-			if(this->block_size < ATMD_ALLOCSIZE)
-				this->block_size *= 2;
-		}
-	} catch (exception& e) {
-		syslog(ATMD_ERR, "Measure [add_event]: memory allocation failed with error %s", e.what());
-		return -1;
-	}
+int StartData::add_event(uint32_t retrig, int32_t stop, int8_t ch) {
 	this->retrig_count.push_back(retrig);
 	this->stoptime.push_back(stop);
 	this->channel.push_back(ch);
 	return 0;
 };
+
+
+/* @fn StartData::reserve(size_t sz)
+ * Reserve memory for 'sz' events
+ *
+ * @param sz The number of objects to preallocate
+ */
+void StartData::reserve(size_t sz) {
+	try {
+		this->retrig_count.reserve(sz);
+		this->stoptime.reserve(sz);
+		this->channel.reserve(sz);
+	} catch (exception& e) {
+		syslog(ATMD_ERR, "Measure [add_event]: memory allocation failed with error %s", e.what());
+	}
+}
 
 
 /* @fn StartData::get_event(uint32_t num, uint32_t& retrig, uint32_t& stop, int8_t& ch)
@@ -60,7 +59,7 @@ int StartData::add_event(uint32_t retrig, uint32_t stop, int8_t ch) {
  * @param ch A reference to an output var for the channel
  * @return Return 0 on success, -1 on error.
  */
-int StartData::get_event(uint32_t num, uint32_t& retrig, uint32_t& stop, int8_t& ch) {
+int StartData::get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& ch) {
 	if(num < this->retrig_count.size()) {
 		retrig = this->retrig_count[num];
 		stop = this->stoptime[num];
@@ -97,12 +96,11 @@ int StartData::get_channel(uint32_t num, int8_t& ch) {
  */
 int StartData::get_stoptime(uint32_t num, double& stop) {
 	if(num < this->retrig_count.size()) {
-		if(this->retrig_count[num] == 1)
-			stop = (double)(this->stoptime[num] + this->start01) * this->time_bin;
-		else if(this->retrig_count[num] > 1)
+		if(this->retrig_count[num] > 0) {
 			stop = (double)(this->stoptime[num] + this->start01) * this->time_bin + (double)(this->retrig_count[num] - 1) * (ATMD_AUTORETRIG + 1) * ATMD_TREF * 1e12;
-		else
+		} else {
 			stop = (double)this->stoptime[num] * this->time_bin;
+		}
 
 	} else {
 		// Non-existent stop, so we return -1
@@ -122,10 +120,7 @@ int StartData::get_stoptime(uint32_t num, double& stop) {
  */
 int StartData::get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop) {
 	if(num < this->retrig_count.size()) {
-		if(this->retrig_count[num] == 1) {
-			stop = (double)(this->stoptime[num] + this->start01) * this->time_bin;
-			retrig = 0;
-		} else if(this->retrig_count[num] > 1) {
+		if(this->retrig_count[num] > 0) {
 			stop = (double)(this->stoptime[num] + this->start01) * this->time_bin;
 			retrig = this->retrig_count[num] - 1;
 		} else {
@@ -139,28 +134,6 @@ int StartData::get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop) {
 	}
 	return 0;
 }
-
-
-/* @fn StartData::set_time(struct timeval* begin, struct timeval* end)
- * Compute the window time.
- *
- * @param begin Pointer to the time structure with the begin time.
- * @param end Pointer to the time structure with the end time.
- */
-void StartData::set_time(struct timeval& begin, struct timeval& end) {
-	this->elapsed_time = (uint64_t)(end.tv_sec - begin.tv_sec) * 1000000 + (end.tv_usec - begin.tv_usec);
-};
-
-
-/* @fn StartData::set_timefrombegin(struct timeval* begin, struct timeval* end)
- * Compute the time of start from the beginngin of the measure.
- *
- * @param begin Pointer to the time structure with the begin time.
- * @param end Pointer to the time structure with the end time.
- */
-void StartData::set_timefrombegin(struct timeval& begin, struct timeval& end) {
-	this->timefrombegin = (uint64_t)(end.tv_sec - begin.tv_sec) * 1000000 + (end.tv_usec - begin.tv_usec);
-};
 
 
 /* @fn Measure::add_start(const StartData& start)
@@ -187,10 +160,13 @@ int Measure::add_start(StartData* start) {
  * @param begin Pointer to the time structure with the begin time.
  * @param end Pointer to the time structure with the end time.
  */
-void Measure::set_time(struct timeval& begin, struct timeval& end) {
-	this->measure_begin.tv_sec = begin.tv_sec;
-	this->measure_begin.tv_usec = begin.tv_usec;
-	this->measure_end.tv_sec = end.tv_sec;
-	this->measure_end.tv_usec = end.tv_usec;
-	this->elapsed_time = (uint64_t)(end.tv_sec - begin.tv_sec) * 1000000 + (end.tv_usec - begin.tv_usec);
+void Measure::set_time(RTIME begin, RTIME end) {
+	this->measure_begin = begin;
+	this->measure_end = end;
+	if(begin > end) {
+		syslog(ATMD_ERR, "Measure [set_time]: end time is before begin time.");
+		this->elapsed_time = 0;
+	} else {
+		this->elapsed_time = (uint64_t)(end - begin) / 1000;
+	}
 };

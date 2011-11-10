@@ -3,6 +3,8 @@
 
 SUBDIRS = src 
 
+ACLOCAL_AMFLAGS = -I m4
+
 atmd_serverdocdir = ${prefix}/doc/atmd_server
 atmd_serverdoc_DATA = \
 	README\

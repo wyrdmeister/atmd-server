@@ -1,14 +1,13 @@
 /* -*- Mode: C; indent-tabs-mode: t; c-basic-offset: 4; tab-width: 4 -*- */
 /*
- * atmd_hardware.h
- * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
+ * Copyright (C) Michele Devetta 2011 <michele.devetta@unimi.it>
  *
- * main.cc is free software: you can redistribute it and/or modify it
+ * This program is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * main.cc is distributed in the hope that it will be useful, but
+ * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
@@ -27,6 +26,9 @@ extern "C" {
 #include "common.h"
 #include "atmd_timings.h"
 #include "atmd_measure.h"
+
+// Matlab file library
+#include "MatFile.h"
 
 
 class ATMDboard {
@@ -67,12 +69,16 @@ class ATMDboard {
 
 	// Intefaces for managing measure timings
 	int set_window(string timestr);
-	string get_window() { return this->measure_window.get(); };
+	Timings& get_window() { return this->measure_window; };
 	int set_tottime(string timestr);
-	string get_tottime() { return this->measure_time.get(); };
+	Timings& get_tottime() { return this->measure_time; };
 
-	bool check_measuretime_exceeded(struct timeval& begin, struct timeval& now);
-	bool check_windowtime_exceeded(struct timeval& begin, struct timeval& now);
+	bool check_measuretime_exceeded(RTIME begin, RTIME now);
+	bool check_windowtime_exceeded(RTIME begin, RTIME now);
+
+	// Maximum number of events per start
+	uint32_t get_max_ev() { return max_ev; }
+	void set_max_ev(uint32_t val) { this->max_ev = val; };
 
 	// Start a new measure
 	int start_measure();
@@ -84,7 +90,7 @@ class ATMDboard {
 	int abort_measure();
 
 	// Check the return status of the measurement thread
-	int collect_measure(int& return_value);
+	int collect_measure();
 
 
 	// MEASURE MANAGEMENT INTERFACE
@@ -102,7 +108,7 @@ class ATMDboard {
 	};
 
 	// Return the number of measures saved
-	int num_measures() { return this->measures.size(); };
+	size_t num_measures() { return this->measures.size(); };
 
 	// Save the requested measure object to a file
 	int save_measure(uint32_t measure_number, string filename, uint32_t format);
@@ -114,10 +120,9 @@ class ATMDboard {
 	int stat_stops(uint32_t measure_number, vector< vector<uint32_t> >& stop_counts);
 	int stat_stops(uint32_t measure_number, vector< vector<uint32_t> >& stop_counts, string win_start, string win_ampl);
 
-
-	// Thread interface
-	pthread_t get_tid() { return this->tid; };
-	void clear_tid() { this->tid = 0; };
+	// Main thread return value
+	int retval() { return this->_retval; };
+	void retval(int val) { this->_retval = val; };
 
 	// Board status interface
 	void set_status(int status) { this->board_status = status; };
@@ -176,6 +181,16 @@ class ATMDboard {
 	// Utility to read motherboard fifo in burst mode
 	uint32_t mb_readfifo() { return (inw(this->base_address+0xA) + (inw(this->base_address+0xC) << 16)); };
 
+	// Interface for the bunch number
+	void set_bnhost(string &host) { this->_bnhost = host; };
+	void set_bnport(uint32_t port) { this->_bnport = port; };
+	string get_bnhost() { return this->_bnhost; };
+	uint16_t get_bnport() { return this->_bnport; };
+	bool bn_enabled() { if(this->_bnsock) return true; else return false; };
+	int connect_bnhost();
+	void close_bnhost() { close(this->_bnsock); this->_bnsock = 0; };
+	int send_bn(uint32_t bn, uint64_t ts);
+
 
 	private:
 	// CURL easy handle
@@ -220,6 +235,9 @@ class ATMDboard {
 	bool en_mtimer;
 	uint16_t mtimer;
 
+	// Max number of events per start
+	uint32_t max_ev;
+
 	// Start counter msb to intflag
 	bool start_to_intflag;
 
@@ -230,8 +248,8 @@ class ATMDboard {
 	// Measure data
 	vector<Measure*> measures;
 
-	// Measure thread information
-	pthread_t tid;
+	// Measure thread return value
+	int _retval;
 
 	// Board status variables
 	int board_status;
@@ -257,18 +275,16 @@ class ATMDboard {
 	// Utility function to write board configuration registers
 	void write_register(uint32_t value);
 
+	// Host for bunch number
+	string _bnhost;
+	uint16_t _bnport;
+	struct sockaddr_in _bn_address;
+	int _bnsock;
 };
 
 
-	// Callback for curl transfers
-	static size_t curl_read(void *ptr, size_t size, size_t count, void *data);
+// Callback for curl transfers
+static size_t curl_read(void *ptr, size_t size, size_t count, void *data);
 
-
-/* Structure to pass a data buffer to curl for network transfer */
-struct curl_buffer {
-	uint32_t size;
-	uint32_t ptr;
-	uint8_t* buffer;
-};
 
 #endif
