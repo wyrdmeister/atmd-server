@@ -2,17 +2,17 @@
 /*
  * atmd_measure_routines.cpp
  * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
- * 
+ *
  * main.cc is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * main.cc is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -71,18 +71,16 @@ void* direct_measure(void* arg) {
 	uint32_t dra_data = 0x00000000; // Reg12 -> Flag for the end of mtimer
 
 	// Allocate objects to hold measurement data
-	Measure current_measure;
-	current_measure.clear();
-	current_measure.set_tbin(board->get_timebin());
-	StartData current_start;
-	StopData current_stop;
+	Measure* current_measure = new Measure();
+	current_measure->clear();
+	StartData* current_start;
 
 	// Time measuring structures
 	struct timeval measure_begin, measure_end, window_start, window_end;
 	bool first_start = true;
 	if(gettimeofday(&measure_begin, NULL))
 		syslog(ATMD_ERR, "Measure [Direct read mode]: gettimeofday failed with error \"%m\"");
-	
+
 	// We initialize the other timeval structures with memcpy that is faster!
 	memcpy(&measure_end, &measure_begin, sizeof(struct timeval));
 	memcpy(&window_start, &measure_begin, sizeof(struct timeval));
@@ -111,12 +109,13 @@ void* direct_measure(void* arg) {
 			// We enable the inputs
 			board->mb_config(0x0000);
 
-			// We reset the window finish flag and the start recieved flag 
+			// We reset the window finish flag and the start recieved flag
 			finish_window = false;
 			start_received = false;
 
-			// Clear data from previous start
-			current_start.clear();
+			// Allocate a new start object
+			current_start = new StartData;
+			current_start->set_tbin(board->get_timebin());
 
 			// We set dra address to 0x000C to read reg12 and detect end of mtimer
 			board->set_dra(0x000C);
@@ -219,10 +218,10 @@ void* direct_measure(void* arg) {
 				// If the finish window flag is set we disable the inputs
 				if(finish_window) {
 					board->mb_config(0x0008);
-					current_start.set_time(window_start, window_end);
-					current_start.set_timefrombegin(measure_begin, window_start);
+					current_start->set_time(window_start, window_end);
+					current_start->set_timefrombegin(measure_begin, window_start);
 					if(enable_debug)
-						syslog(ATMD_DEBUG, "Measure [Direct read mode]: start received %lu microseconds after the begin of the measure.", current_start.get_timefrombegin());
+						syslog(ATMD_DEBUG, "Measure [Direct read mode]: start received %lu microseconds after the begin of the measure.", current_start->get_timefrombegin());
 				}
 
 				if(en_fifo0) {
@@ -242,13 +241,11 @@ void* direct_measure(void* arg) {
 						}
 
 						// Saving stop data
-						current_stop.set_startcount(start_count + (main_startcounter0 * 256));
-						current_stop.set_bins((dra_data & 0x0001FFFF) - board->get_start_offset());
-						current_stop.set_channel(((dra_data & 0x0C000000) >> 26) + 1);
-						current_stop.set_slope((dra_data & 0x00020000) >> 17);
-
-						// Add stop to current start
-						if(current_start.add_stop(current_stop)) {
+						int8_t ch = (int8_t)( ((dra_data & 0x0C000000) >> 26) + 1);
+						if(((dra_data & 0x00020000) >> 17) == 0) {
+							ch = -ch;
+						}
+						if(current_start->add_event( (uint32_t)( start_count + (main_startcounter0 * 256) ), (uint32_t)( (dra_data & 0x0001FFFF) - board->get_start_offset() ), ch)) {
 							syslog(ATMD_ERR, "Measure [Direct read mode]: error saving stops of start %d.", measure_start_counter);
 							throw(ATMD_ERR_ALLOC);
 						}
@@ -280,13 +277,11 @@ void* direct_measure(void* arg) {
 						}
 
 						// Saving stop data
-						current_stop.set_startcount(start_count + (main_startcounter1 * 256));
-						current_stop.set_bins((dra_data & 0x0001FFFF) - board->get_start_offset());
-						current_stop.set_channel(((dra_data & 0x0C000000) >> 26) + 5);
-						current_stop.set_slope((dra_data & 0x00020000) >> 17);
-
-						// Add stop to current start
-						if(current_start.add_stop(current_stop)) {
+						int8_t ch = (int8_t)( ((dra_data & 0x0C000000) >> 26) + 5);
+						if(((dra_data & 0x00020000) >> 17) == 0) {
+							ch = -ch;
+						}
+						if(current_start->add_event( (uint32_t)( start_count + (main_startcounter1 * 256) ), (uint32_t)( (dra_data & 0x0001FFFF) - board->get_start_offset() ), ch)) {
 							syslog(ATMD_ERR, "Measure [Direct read mode]: error saving stops of start %d.", measure_start_counter);
 							throw(ATMD_ERR_ALLOC);
 						}
@@ -317,16 +312,16 @@ void* direct_measure(void* arg) {
 
 			// We save the start01
 			board->set_dra(0x000A);
-			current_start.set_start01(board->read_dra() & 0x0001FFFF);
+			current_start->set_start01(board->read_dra() & 0x0001FFFF);
 
 			// Add current start to current measure_finished
-			if(current_measure.add_start(current_start)) {
+			if(current_measure->add_start(current_start)) {
 				syslog(ATMD_ERR, "Measure [Direct read mode]: error saving start %d", measure_start_counter);
 				throw(ATMD_ERR_ALLOC);
 			}
 
 			if(enable_debug)
-				syslog(ATMD_DEBUG, "Measure [Direct read mode]: added start %d with %d stops.", measure_start_counter, current_start.count_stops());
+				syslog(ATMD_DEBUG, "Measure [Direct read mode]: added start %d with %d stops.", measure_start_counter, current_start->count_stops());
 
 			if(board->get_stop() || finish_measure)
 				break;
@@ -338,19 +333,19 @@ void* direct_measure(void* arg) {
 		} while(true);
 
 	} catch(int e) {
-		current_measure.set_incomplete(true);
+		current_measure->set_incomplete(true);
 		board->set_status(ATMD_STATUS_ERROR);
 		board->reset();
 		*retval = e;
 	} catch(exception& e) {
 		syslog(ATMD_ERR, "Measure [Direct read mode]: caught an unexpected exception (\"%s\").", e.what());
-		current_measure.set_incomplete(true);
+		current_measure->set_incomplete(true);
 		board->set_status(ATMD_STATUS_ERROR);
 		board->reset();
 		*retval = ATMD_ERR_UNKNOWN_EX;
 	} catch(...) {
 		syslog(ATMD_ERR, "Measure [Direct read mode]: caught an unknown exception.");
-		current_measure.set_incomplete(true);
+		current_measure->set_incomplete(true);
 		board->set_status(ATMD_STATUS_ERROR);
 		board->reset();
 		*retval = ATMD_ERR_UNKNOWN_EX;
@@ -359,14 +354,14 @@ void* direct_measure(void* arg) {
 	// We get measure end time and save total elapsed time
 	if(gettimeofday(&measure_end, NULL))
 		syslog(ATMD_ERR, "Measure [Direct read mode]: gettimeofday failed with error \"%m\"");
-	current_measure.set_time(measure_begin, measure_end);
+	current_measure->set_time(measure_begin, measure_end);
 	if(board->get_stop())
-		syslog(ATMD_INFO, "Measure [Direct read mode]: measure stopped. Got %d start events. Elapsed time is %lu us.", current_measure.count_starts(), current_measure.get_time());
+		syslog(ATMD_INFO, "Measure [Direct read mode]: measure stopped. Got %d start events. Elapsed time is %lu us.", current_measure->count_starts(), current_measure->get_time());
 	else
-		syslog(ATMD_INFO, "Measure [Direct read mode]: measure finished. Got %d start events. Elapsed time is %lu us.", current_measure.count_starts(), current_measure.get_time());
+		syslog(ATMD_INFO, "Measure [Direct read mode]: measure finished. Got %d start events. Elapsed time is %lu us.", current_measure->count_starts(), current_measure->get_time());
 
 	// Save the current measure
-	if(current_measure.count_starts() > 0) {
+	if(current_measure->count_starts() > 0) {
 		if(board->add_measure(current_measure)) {
 			syslog(ATMD_ERR, "Measure [Direct read mode]: error adding measure to measure vector.");
 			board->set_status(ATMD_STATUS_ERROR);

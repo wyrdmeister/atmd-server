@@ -2,17 +2,17 @@
 /*
  * atmd_hardware.cpp
  * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
- * 
+ *
  * main.cc is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * main.cc is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -38,7 +38,7 @@ ATMDboard::ATMDboard() {
 
 	// Hardware base address
 	this->base_address = 0x0000;
-	
+
 	// Reset board configuration
 	this->reset_config();
 }
@@ -86,6 +86,19 @@ void ATMDboard::reset_config() {
 
 	// Board status
 	this->board_status = ATMD_STATUS_IDLE;
+
+	// Autorestart
+	this->autostart = ATMD_AUTOSTART_DISABLED;
+	this->fileprefix = "";
+	this->auto_range.set("0s");
+	this->auto_format = ATMD_FORMAT_MATPS2;
+	this->measure_counter = 0;
+
+	// FTP variables
+	memset(this->curl_error, 0x0, CURL_ERROR_SIZE);
+	this->host = "";
+	this->username = "";
+	this->password = "";
 }
 
 
@@ -96,6 +109,14 @@ void ATMDboard::reset_config() {
  * @return Retrun 0 on success, -1 on error.
  */
 int ATMDboard::init(bool simulate = false) {
+	// Initialize libcurl handle
+	if((this->easy_handle = curl_easy_init()) == NULL) {
+		syslog(ATMD_INFO, "Board init: failed to initialize libcurl.");
+		return -1;
+	}
+	memset(this->curl_error, 0x0, CURL_ERROR_SIZE);
+	curl_easy_setopt(this->easy_handle, CURLOPT_ERRORBUFFER, this->curl_error);
+
 	if(simulate) {
 		// Board simulation enabled
 		syslog(ATMD_INFO, "Board init: enabled board simulation mode.");
@@ -117,10 +138,10 @@ int ATMDboard::search_board() {
 
 	// Getting I/O privileges
 	if(iopl(3)) {
-		syslog(ATMD_CRIT, "Board init: failed to get direct I/O privileges (Error: %m).");
+		syslog(ATMD_CRIT, "Board [search_board]: failed to get direct I/O privileges (Error: %m).");
 		return -1;
 	} else {
-		syslog(ATMD_DEBUG, "Board init: direct I/O access privileges correctly configured.");
+		syslog(ATMD_DEBUG, "Board [search_board]: direct I/O access privileges correctly configured.");
 	}
 
 	// Begin ATMD-GPX board search
@@ -137,13 +158,23 @@ int ATMDboard::search_board() {
 
 		if(pci_dev->vendor_id == 0x10b5 && pci_dev->device_id == 0x9050) {
 			// If ids match, check all addresses to find the correct one...
+			if(enable_debug)
+				syslog(ATMD_INFO, "Board [search_board]: Found matching board. VID 0x%04x, PID 0x%04x", pci_dev->vendor_id, pci_dev->device_id);
+
 			int i;
 			for(i=0; i<6; i++) {
 				if(pci_dev->base_addr[i]) {
+					if(enable_debug)
+						syslog(ATMD_INFO, "Board [search_board]: Checking hardware address 0x%04x.", (uint16_t)(pci_dev->base_addr[i] & PCI_ADDR_IO_MASK));
+
 					// We check register at offset 0x4 from base address for module identification value
-					if(inw(pci_dev->base_addr[i] + 0x4) == 0x8000) {
+					if(inw( (pci_dev->base_addr[i] & PCI_ADDR_IO_MASK) + 0x4) == 0x8000) {
 						// ATMD-GPX Found!
-						this->base_address = pci_dev->base_addr[i];
+						this->base_address = (uint16_t)(pci_dev->base_addr[i] & PCI_ADDR_IO_MASK);
+
+						if(enable_debug)
+							syslog(ATMD_INFO, "Board [search_board]: Board address set to 0x%04x.", this->base_address);
+
 						break;
 					}
 				}
@@ -157,9 +188,9 @@ int ATMDboard::search_board() {
 	pci_cleanup(pci_acc);
 
 	if(this->base_address) {
-		syslog(ATMD_INFO, "Board init: ATMD-GPX board found at address: 0x%x.", this->base_address);
+		syslog(ATMD_INFO, "Board [search_board]: ATMD-GPX board found at address: 0x%04x.", this->base_address);
 	} else {
-		syslog(ATMD_CRIT, "Board init: ATMD-GPX board not found.");
+		syslog(ATMD_CRIT, "Board [search_board]: ATMD-GPX board not found.");
 		return -1;
 	}
 	return 0;
@@ -170,7 +201,7 @@ int ATMDboard::search_board() {
  * Perform a ATMD-GPX board total reset.
  */
 void ATMDboard::reset() {
-	syslog(ATMD_INFO, "Performing ATMD-GPX board reset.");
+	syslog(ATMD_INFO, "Board [reset]: Performing ATMD-GPX board reset.");
 
 	// Board total reset
 	this->mb_config(0x0101);
@@ -189,7 +220,8 @@ void ATMDboard::reset() {
  * Perform a ATMD-GPX board total reset.
  */
 void ATMDboard::master_reset() {
-	syslog(ATMD_INFO, "Performing TDC-GPX master reset.");
+	if(enable_debug)
+		syslog(ATMD_INFO, "Board [master_reset] Performing TDC-GPX master reset.");
 
 	// TDC-GPX software master reset (we need to keep the start timer!)
 	uint32_t reg = (0x42400000) | (ATMD_AUTORETRIG);
@@ -204,7 +236,7 @@ void ATMDboard::master_reset() {
 
 
 /* @fn ATMDboard::write_register(unsigned int value)
- * Write the first 28bit of value to a configuration register of the TDC-GPX 
+ * Write the first 28bit of value to a configuration register of the TDC-GPX
  * identified by the most significant 4 bits of value.
  *
  * @param value Data to be written to the configuration register.
@@ -232,29 +264,34 @@ int ATMDboard::boardconfig() {
 	uint16_t rising = 0x0000 | ((this->en_start_rising) ? 0x0001 : 0x0000) | (this->get_rising_mask() << 1);
 	uint16_t falling = 0x0000 | ((this->en_start_falling) ? 0x0001 : 0x0000) | (this->get_falling_mask() << 1);
 	reg = (0x00000081) | ((rising << 10) | (falling << 19));
-	syslog(ATMD_DEBUG, "Config: reg0: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg0: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg1: channel adjust... useless!
 	reg = (0x10000000);
-	syslog(ATMD_DEBUG, "Config: reg1: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg1: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg2: channels enable and I-Mode
 	uint16_t chan_disable = ~(rising | falling) & 0x01FF;
 	reg = (0x20000002) | (chan_disable << 3);
-	syslog(ATMD_DEBUG, "Config: reg2: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg2: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg3: not used
 	reg = (0x30000000);
-	syslog(ATMD_DEBUG, "Config: reg3: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg3: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg4: start timer
 	reg = (0x42000000) | (ATMD_AUTORETRIG);
 	reg = reg | ((this->en_mtimer) ? 0x04000000 : 0x0); // Enable mtimer tigger on start pulse
-	syslog(ATMD_DEBUG, "Config: reg4: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg4: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg5: disable stop before start, disable start after start, start offset
@@ -262,12 +299,14 @@ int ATMDboard::boardconfig() {
 	reg = reg | ((this->start_dis_start) ? 0x00400000 : 0x0); // Disable start after start
 	reg = reg | ((this->stop_dis_start) ? 0x00200000 : 0x0); // Disable stop before start
 	reg = reg | this->start_offset; // Set the start offset
-	syslog(ATMD_DEBUG, "Config: reg5: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg5: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg6: nothing relevant
 	reg = (0x600000FF);
-	syslog(ATMD_DEBUG, "Config: reg6: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg6: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg7: MTimer and PLL settings
@@ -275,17 +314,20 @@ int ATMDboard::boardconfig() {
 	reg = reg | (this->hsdiv & 0x00FF); // Configure high speed divider
 	reg = reg | ((this->refclkdiv & 0x0007) << 8); // Configure reference clock divider
 	reg = reg | (this->mtimer << 15); // Configure mtimer
-	syslog(ATMD_DEBUG, "Config: reg7: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg7: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg11: unmask error flags
 	reg = (0xB7FF0000);
-	syslog(ATMD_DEBUG, "Config: reg11: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg11: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Configure reg12: msb of start to intflag or mtimer end to intflag
 	reg = (0xC0000000) | ((this->start_to_intflag) ? 0x04000000 : 0x02000000);
-	syslog(ATMD_DEBUG, "Config: reg12: 0x%08X.", reg);
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "Config [boardconfig]: reg12: 0x%08X.", reg);
 	this->write_register(reg);
 
 	// Sleep to let the PLL lock
@@ -298,12 +340,13 @@ int ATMDboard::boardconfig() {
 	this->set_dra(0x000C);
 	reg = this->read_dra();
 	if(enable_debug)
-		syslog(ATMD_DEBUG, "Config: status register is 0x%X", reg);
+		syslog(ATMD_DEBUG, "Config [boardconfig]: status register is 0x%X", reg);
 	if(reg & 0x00000400) {
-		syslog(ATMD_ERR, "Config: TDC-GPX PLL not locked. Probably wrong resolution (refclkdiv = %d, hsdiv = %d).", this->refclkdiv, this->hsdiv);
+		syslog(ATMD_ERR, "Config [boardconfig]: TDC-GPX PLL not locked. Probably wrong resolution (refclkdiv = %d, hsdiv = %d).", this->refclkdiv, this->hsdiv);
 		return -1;
 	} else {
-		syslog(ATMD_DEBUG, "Config: TDC-GPX PLL locked. Using a resolution of %f ps.", this->time_bin);
+		if(enable_debug)
+			syslog(ATMD_DEBUG, "Config [boardconfig]: TDC-GPX PLL locked. Using a resolution of %f ps.", this->time_bin);
 		return 0;
 	}
 }
@@ -323,7 +366,7 @@ int ATMDboard::set_window(string timestr) {
 
 		// A raw value as the measure window has no meaning
 		if(this->measure_window.is_raw()) {
-			syslog(ATMD_ERR, "Config: error setting time windows. A raw value is not allowed.");
+			syslog(ATMD_ERR, "Config [set_window]: error setting time windows. A raw value is not allowed.");
 			this->measure_window.set("0s");
 			return -1;
 		}
@@ -348,16 +391,16 @@ int ATMDboard::set_tottime(string timestr) {
 
 		// If the saved time is zero we return an error
 		if(this->measure_time.is_zero()) {
-			syslog(ATMD_ERR, "Config: error setting measure time. A zero value is not valid.");
+			syslog(ATMD_ERR, "Config [set_tottime]: error setting measure time. A zero value is not valid.");
 			return -1;
 		}
 
-		// If the time is not raw we check that the measure time is not less than the measure window 
+		// If the time is not raw we check that the measure time is not less than the measure window
 		if(!this->measure_time.is_raw()) {
 			double time = this->measure_time.get_sec() * 1e6 + this->measure_time.get_usec();
 			double window = this->measure_window.get_sec() * 1e6 + this->measure_window.get_usec();
 			if(time < window) {
-				syslog(ATMD_ERR, "Config: error setting measure time. Window time cannot be greater than measure time.");
+				syslog(ATMD_ERR, "Config [set_tottime]: error setting measure time. Window time cannot be greater than measure time.");
 				return -1;
 			}
 		}
@@ -391,25 +434,17 @@ void ATMDboard::set_resolution(uint16_t refclk, uint16_t hs) {
  */
 int ATMDboard::start_measure() {
 	/*
-	First of all we have to choose the measurement mode. There are two available
-	modes:
-	1) If time_windows <= 1ms
-		We do the measure in burst mode. Measure window duration is controlled by
-		the global timer. We do not use an external start counter.
-	2) If time windows > 1ms
-		We do a full measure with almost unlimited time_window. We use a software
-		32 bit start counter.
-		In principle the measure window is limited to the number of start events
-		that we can count. With a retriggering of 5us and a 32 bit counter the limit
-		should be 5.96 hours.
+	The time windows is almost unlimited. We use a software 32 bit start counter,
+	so in principle the measure window is limited to the number of start events
+	that we can count. With a retriggering of 5us and a 32 bit counter the limit
+	should be 5.96 hours.
 
-	In every mode the measure time is only limited by the timeval structure taken
+	The measure time is only limited by the timeval structure taken
 	as input by gettimeofday, theoretically giving up to 2^32 seconds of measure
 	time, that is approx 136 years.
 	*/
 
-	// These checks are here only to be sure that everything is ok. Other checks should
-	// have prevented us from reaching this point without the right values in place.
+	// We check that the timings are set and that there are at least the start channel and one stop channel enabled
 	if(this->measure_window.is_zero() || this->measure_time.is_zero()) {
 		syslog(ATMD_ERR, "Measure [Start]: could not start a measure if the timings are not set.");
 		return -1;
@@ -426,7 +461,9 @@ int ATMDboard::start_measure() {
 	// We check if we should simulate the measure_stop
 	if(this->simulation()) {
 		// TODO: here we should simulate a measure...
-		return 0;
+		// NOT IMPLEMENTED
+		syslog(ATMD_ERR, "Measure [Start]: simulation mode enabled, but not implemeted.");
+		return -1;
 	}
 
 	// Thread attributes structure
@@ -461,51 +498,25 @@ int ATMDboard::start_measure() {
 		}
 	}
 
-	// BURST MODE DISABLED! DOESN'T WORK!
-	//if(this->measure_window.get_sec() == 0 && this->measure_window.get_usec() <= 1000) {
-	if(0) {
-		// Very short window (Burst mode)
+	// MSB of start counter unmasked to intflag
+	this->start_to_intflag = true;
 
-		//We do not unmask the start msb to intflag, but instead mtimer.
-		this->start_to_intflag = false;
-
-		// We commit board configuration
-		if(this->boardconfig())
-			// Board config failed. PLL not locked.
-			return -1;
-
-		// We start the measure in burst mode running the measure function in another thread
-		this->set_status(ATMD_STATUS_STARTING);
-		this->set_stop(false);
-		if(pthread_create(&(this->tid), &thread_attributes, &(burst_measure), (void *)this)) {
-			syslog(ATMD_ERR, "Measure [Burst mode]: error starting measuring thread with error \"%m\".");
-			return -1;
-		} else {
-			syslog(ATMD_ERR, "Measure [Burst mode]: successfully started measuring thread (tid = %d).", (int)this->get_tid());
-		}
-
-	} else {
-		// Standard measuring mode (Direct read)
-
-		// MSB of start counter unmasked to intflag
-		this->start_to_intflag = true;
-
-		// We commit board configuration
-		if(this->boardconfig()) {
-			// Board config failed. PLL not locked.
-			return -1;
-		}
-
-		// We start the measure in direct mode running the measure function in another thread
-		this->set_status(ATMD_STATUS_STARTING);
-		this->set_stop(false);
-		if(pthread_create(&(this->tid), &thread_attributes, &(direct_measure), (void *)this)) {
-			syslog(ATMD_ERR, "Measure [Direct read mode]: error starting measuring thread with error \"%m\".");
-			return -1;
-		} else {
-			syslog(ATMD_ERR, "Measure [Direct read mode]: successfully started measuring thread (tid = %d).", (int)this->get_tid());
-		}
+	// We commit board configuration
+	if(this->boardconfig()) {
+		// Board config failed. PLL not locked.
+		return -1;
 	}
+
+	// We start the measure in direct mode running the measure function in another thread
+	this->set_status(ATMD_STATUS_STARTING);
+	this->set_stop(false);
+	if(pthread_create(&(this->tid), &thread_attributes, &(direct_measure), (void *)this)) {
+		syslog(ATMD_ERR, "Measure [Direct read mode]: error starting measuring thread with error \"%m\".");
+		return -1;
+	} else {
+		syslog(ATMD_ERR, "Measure [Direct read mode]: successfully started measuring thread (tid = %d).", (int)this->get_tid());
+	}
+
 
 	// Here we poll board status waiting for ATMD_STATUS_RUNNING
 	struct timespec sleeptime;
@@ -610,18 +621,20 @@ int ATMDboard::collect_measure(int &return_value) {
 	} else {
 		return_value = 0;
 	}
-	
-	// We set the process priority back to normal
-	errno = 0; // reset of errno
-	if(setpriority(PRIO_PROCESS, 0, 0) == -1) {
-		if(errno != 0) {
-			syslog(ATMD_ERR, "Measure [Collect]: failed to set priority back to normal (Error: \"%m\").");
-			return_value = -1;
+
+	// If we are not in autorestart mode we set the process priority back to normal
+	if(this->autostart != ATMD_AUTOSTART_ENABLED) {
+		errno = 0; // reset of errno
+		if(setpriority(PRIO_PROCESS, 0, 0) == -1) {
+			if(errno != 0) {
+				syslog(ATMD_ERR, "Measure [Collect]: failed to set priority back to normal (Error: \"%m\").");
+				return_value = -1;
+			} else {
+				syslog(ATMD_INFO, "Measure [Collect]: set priority back to normal.");
+			}
 		} else {
 			syslog(ATMD_INFO, "Measure [Collect]: set priority back to normal.");
 		}
-	} else {
-		syslog(ATMD_INFO, "Measure [Collect]: set priority back to normal.");
 	}
 
 	this->clear_tid();
@@ -727,7 +740,7 @@ uint8_t ATMDboard::get_falling_mask() {
  * @param measure A reference to the measure that should be added.
  * @return Return 0 on success, -1 on error.
  */
-int ATMDboard::add_measure(Measure& measure) {
+int ATMDboard::add_measure(Measure* measure) {
 	try {
 		this->measures.push_back(measure);
 		return 0;
@@ -746,6 +759,7 @@ int ATMDboard::add_measure(Measure& measure) {
  */
 int ATMDboard::del_measure(uint32_t measure_number) {
 	if(measure_number < this->num_measures()) {
+		delete this->measures[measure_number];
 		this->measures.erase(this->measures.begin()+measure_number);
 		return 0;
 	} else {
@@ -754,7 +768,7 @@ int ATMDboard::del_measure(uint32_t measure_number) {
 }
 
 
-/* @fn ATMDboard::save_measure(int measure_number, int format)
+/* @fn ATMDboard::save_measure(uint32_t measure_number, string filename, uint32_t format)
  * Save a measure object to a file in the specified format.
  *
  * @param measure_number The number of the measure that we want to save.
@@ -767,184 +781,692 @@ int ATMDboard::save_measure(uint32_t measure_number, string filename, uint32_t f
 
 	// Check if the measure number is valid.
 	if(measure_number < 0 || measure_number >= this->num_measures()) {
-		syslog(ATMD_ERR, "Measure [save_measure]: trying to save a non exsitent measure.");
+		syslog(ATMD_ERR, "Measure [save_measure]: trying to save a non existent measure.");
 		return -1;
 	}
 
-	// Then we check that the supplied path is valid (for safety all files should be saved under /home)
-	pcrecpp::RE path_re("^\\/home\\/[a-zA-Z0-9\\.\\_\\-\\/]+");
-	if(!path_re.FullMatch(filename)) {
-		syslog(ATMD_ERR, "Measure [save_measure]: the filename supplied is not valid.");
-		return -1;
-	}
 	// For safety we remove all relative path syntax
 	pcrecpp::RE("\\.\\.\\/").GlobalReplace("", &filename);
 
-	// Opening file
-	if(format == ATMD_FORMAT_BINPS || format == ATMD_FORMAT_BINRAW) {
-		// Open in binary format
-		savefile.open(filename.c_str(), fstream::out | fstream::trunc | fstream::binary);
+	// For safety the supplied path is taken relative to /home/data
+	string fullpath = "/home/data/";
+	if(filename[0] == '/')
+		filename.erase(0,1);
+	fullpath.append(filename);
 
-	} else {
-		// Open in text format
-		savefile.open(filename.c_str(), fstream::out | fstream::trunc);
-		savefile.precision(15);
+	// URL for FTP transfers
+	string fullurl = "";
+	if(format == ATMD_FORMAT_MATPS2_FTP) {
+		if(this->host == "") {
+			syslog(ATMD_ERR, "Measure [save_measure]: requested to save a measure using FTP but hostname is not set.");
+			return -1;
+		}
+
+		fullurl.append("ftp://");
+		if(this->username != "") {
+			fullurl.append(this->username);
+			if(this->password != "") {
+				fullurl.append(":");
+				fullurl.append(this->password);
+			}
+			fullurl.append("@");
+		}
+		fullurl.append(this->host);
+		fullurl.append("/");
+		fullurl.append(filename);
 	}
 
-	if(!savefile.is_open()) {
-		syslog(ATMD_ERR, "Measure [save_measure]: error opening file %s.", filename.c_str());
-		return -1;
+	if(format != ATMD_FORMAT_MATPS2_FTP) {
+
+		// Opening file
+		switch(format) {
+			case ATMD_FORMAT_BINPS:
+			case ATMD_FORMAT_BINRAW:
+			case ATMD_FORMAT_MATPS1:
+			case ATMD_FORMAT_MATPS2:
+			case ATMD_FORMAT_MATRAW:
+			default:
+				// Open in binary format
+				savefile.open(filename.c_str(), fstream::out | fstream::trunc | fstream::binary);
+				break;
+
+			case ATMD_FORMAT_RAW:
+			case ATMD_FORMAT_PS:
+			case ATMD_FORMAT_US:
+			case ATMD_FORMAT_DEBUG:
+				// Open in text format
+				savefile.open(fullpath.c_str(), fstream::out | fstream::trunc);
+				savefile.precision(15);
+				break;
+		}
+
+		if(!savefile.is_open()) {
+			syslog(ATMD_ERR, "Measure [save_measure]: error opening file \"%s\".", fullpath.c_str());
+			return -1;
+		}
+		syslog(ATMD_INFO, "Measure [save_measure]: saving measure %d to file \"%s\".", measure_number, fullpath.c_str());
 	}
-	syslog(ATMD_INFO, "Measure [save_measure]: saving measure %d to file %s.", measure_number, filename.c_str());
+
 
 	int i, j;
-	StartData current_start;
-	StopData current_stop;
+	StartData* current_start;
+	uint32_t start_count = this->measures[measure_number]->count_starts();
+
 	double stoptime;
+	int8_t channel;
 	uint32_t ref_count;
-	uint32_t start_count = this->measures[measure_number].count_starts();
-	uint32_t stop_count = 0;
-	uint8_t channel = 0, slope = 0;
+	uint32_t stop_count;
+
+	/* Vars for MAT */
+	uint32_t ev_ind = 0, num_events = 0;
+	time_t current_time;
+	char* date_str = NULL;
+	uint8_t* out_buffer = NULL;
+	uint32_t total_size = 0, offset = 0, offset_ch = 0, offset_st = 0, len_st = 0, len_ch = 0;
+	struct timeval measure_begin, measure_end;
+	this->measures[measure_number]->get_begin(measure_begin);
+	this->measures[measure_number]->get_end(measure_end);
+
+	stringstream txtbuffer (stringstream::in);
 
 	switch(format) {
 		case ATMD_FORMAT_RAW:
-			// We write an header
-			savefile << "start\tchannel\tslope\trefcount\tstoptime" << endl;
-
-			// We cycle over all starts
-			for(i = 0; i < start_count; i++) {
-				current_start = this->measures[measure_number].get_start(i);
-
-				// We cycle over all stops of current start
-				for(j = 0; j < current_start.count_stops(); j++) {
-					current_stop = current_start.get_stop(j);
-					this->compute_stoptime(measure_number, current_stop, current_start.get_start01(), stoptime, ref_count);
-					savefile << i+1 << "\t" << (uint32_t)current_stop.get_channel() << "\t" << (uint32_t)current_stop.get_slope() << "\t" << ref_count << "\t" << stoptime << endl;
-				}
-			}
-			break;
-
 		case ATMD_FORMAT_US:
 		case ATMD_FORMAT_PS:
+		case ATMD_FORMAT_DEBUG:
 		default:
+
+			// We make sure that the string stream is empty
+			txtbuffer.str("");
+
 			// We write an header
-			savefile << "start\tchannel\tslope\tstoptime" << endl;
+			if(format == ATMD_FORMAT_RAW)
+				txtbuffer << "start\tchannel\tslope\trefcount\tstoptime" << endl;
+			else if(format == ATMD_FORMAT_DEBUG)
+				txtbuffer << "start\tstart_time\ttimefrombegin\tchannel\trefcount\tstoptime" << endl;
+			else
+				txtbuffer << "start\tchannel\tslope\tstoptime" << endl;
 
 			// We cycle over all starts
 			for(i = 0; i < start_count; i++) {
-				current_start = this->measures[measure_number].get_start(i);
+				if(!(current_start = this->measures[measure_number]->get_start(i))) {
+					syslog(ATMD_ERR, "Measure [save_measure]: trying to save a non existent start.");
+					return -1;
+				}
 
 				// We cycle over all stops of current start
-				for(j = 0; j < current_start.count_stops(); j++) {
-					current_stop = current_start.get_stop(j);
-					this->compute_stoptime(measure_number, current_stop, current_start.get_start01(), stoptime);
-					savefile << i+1 << "\t" << (uint32_t)current_stop.get_channel() << "\t" << (uint32_t)current_stop.get_slope() << "\t" << ((format == ATMD_FORMAT_US) ? (stoptime / 1e6) : stoptime) << endl;
-				}
-			}
-			break;
+				for(j = 0; j < current_start->count_stops(); j++) {
+					current_start->get_channel(j, channel);
 
-		case ATMD_FORMAT_BINPS:
-		case ATMD_FORMAT_BINRAW:
-			// We write the number of start in the measure
-			savefile.write(reinterpret_cast<char *>(&start_count), sizeof(start_count));
+					if(format == ATMD_FORMAT_RAW) {
+						current_start->get_rawstoptime(j, ref_count, stoptime);
+						txtbuffer << i+1 << "\t" << (int32_t)channel << "\t" << ref_count << "\t" << stoptime << endl;
 
-			// We cycle over all starts
-			for(i = 0; i < start_count; i++) {
-				current_start = this->measures[measure_number].get_start(i);
-				uint32_t stop_count = current_start.count_stops();
-
-				// We write the number of stops for the current start
-				savefile.write(reinterpret_cast<char *>(&stop_count), sizeof(stop_count));
-
-				// We cycle over all stops of the current start
-				for(j = 0; j < stop_count; j++) {
-					current_stop = current_start.get_stop(j);
-					channel = current_stop.get_channel();
-					slope = current_stop.get_slope();
-
-					if(format == ATMD_FORMAT_BINRAW) {
-						this->compute_stoptime(measure_number, current_stop, current_start.get_start01(), stoptime, ref_count);
-						savefile.write(reinterpret_cast<char *>(&channel), sizeof(channel));
-						savefile.write(reinterpret_cast<char *>(&slope), sizeof(slope));
-						savefile.write(reinterpret_cast<char *>(&ref_count), sizeof(ref_count));
-						savefile.write(reinterpret_cast<char *>(&stoptime), sizeof(stoptime));
+					} else if(format == ATMD_FORMAT_DEBUG) {
+						current_start->get_rawstoptime(j, ref_count, stoptime);
+						txtbuffer << i+1 << "\t" << current_start->get_time() << "\t" << current_start->get_timefrombegin() << "\t" << (int32_t)channel << "\t" << ref_count << "\t" << stoptime << endl;
 
 					} else {
-						this->compute_stoptime(measure_number, current_stop, current_start.get_start01(), stoptime);
-						savefile.write(reinterpret_cast<char *>(&channel), sizeof(channel));
-						savefile.write(reinterpret_cast<char *>(&slope), sizeof(slope));
-						savefile.write(reinterpret_cast<char *>(&stoptime), sizeof(stoptime));
+						current_start->get_stoptime(j, stoptime);
+						txtbuffer << i+1 << "\t" << (int32_t)channel << "\t" << ((format == ATMD_FORMAT_US) ? (stoptime / 1e6) : stoptime) << endl;
 					}
 				}
 			}
+
+			// We write the string stream to the output file
+			savefile << txtbuffer.str();
 			break;
 
-		case ATMD_FORMAT_DEBUG:
-			// We write an header
-			savefile << "start\tstart_time\ttimefrombegin\tchannel\tslope\trefcount\tstoptime" << endl;
 
-			// We cycle over all starts
+		case ATMD_FORMAT_BINPS:
+		case ATMD_FORMAT_BINRAW:
+			syslog(ATMD_ERR, "Measure [save_measure]: binary format is not yet implemented.");
+			return -1;
+			break;
+
+
+		case ATMD_FORMAT_MATPS1: /* Matlab format with all data in a single variable */
+
+			/* First of all we should count all the events */
+			num_events = 0;
 			for(i = 0; i < start_count; i++) {
-				current_start = this->measures[measure_number].get_start(i);
-
-				// We cycle over all stops of current start
-				for(j = 0; j < current_start.count_stops(); j++) {
-					current_stop = current_start.get_stop(j);
-					this->compute_stoptime(measure_number, current_stop, current_start.get_start01(), stoptime, ref_count);
-					savefile << i+1 << "\t" << current_start.get_time() << "\t" << current_start.get_timefrombegin() << "\t" << (uint32_t)current_stop.get_channel() << "\t" << (uint32_t)current_stop.get_slope() << "\t" << ref_count << "\t" << stoptime << endl;
+				if(!(current_start = this->measures[measure_number]->get_start(i))) {
+					syslog(ATMD_ERR, "Measure [save_measure]: trying to save a non existent start.");
+					return -1;
 				}
+				num_events += current_start->count_stops();
+			}
+
+			/* Format the timestamp */
+			current_time = time(NULL);
+			date_str = ctime(&current_time);
+
+			/* Compute the size of the mat */
+			total_size = 128 + 56 + 72 + 64 + sizeof(double) * 3 * num_events + 8 + 8; // Header + 1st data header + 2nd data header + 1st data
+
+			syslog(ATMD_DEBUG, "Measure [save_measure]: saving measure to MAT file.");
+			syslog(ATMD_DEBUG, "Measure [save_measure]: - total size: %d. total events: %d.", total_size, num_events);
+
+			/* Allocate buffer */
+			out_buffer = new uint8_t[total_size];
+			if(out_buffer == NULL) {
+				syslog(ATMD_ERR, "Measure [save_measure]: failed to allocate output buffer.");
+				return -1;
+
+			} else {
+				memset(out_buffer, 0x00, total_size);
+
+				/* Offset var for convenience... */
+				offset = 0;
+
+				/* Setup header */
+				memset(out_buffer, 0x20, 128);
+				memcpy(out_buffer, MAT_HEADER, strlen(MAT_HEADER));
+				memcpy(out_buffer+strlen(MAT_HEADER), date_str, strlen(date_str));
+				*(uint8_t*)(out_buffer+124) = MAT_VERSION_1B;
+				*(uint8_t*)(out_buffer+125) = MAT_VERSION_2B;
+				*(uint16_t*)(out_buffer+126) = MAT_ENDIAN;
+
+				/* Setup first data header - For actual measurement data */
+				offset += 128;
+				*(uint32_t*)(out_buffer+offset) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset+4) = 48 + sizeof(double) * 3 * num_events;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: first data header at offset: %d.", offset);
+
+				/* Flags */
+				offset += 8;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = mxDOUBLE_CLASS;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: first flags at offset: %d.", offset);
+
+				/* Dimensions */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = num_events;
+				*(uint32_t*)(out_buffer+offset+12) = 3;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: first dimensions at offset: %d.", offset);
+
+				/* Array name */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miINT8 | (4 << 16);
+				memcpy(out_buffer+offset+4, "data", 4);
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: first array name at offset: %d.", offset);
+
+				/* Array content */
+				offset += 8;
+				*(uint32_t*)(out_buffer+offset) = miDOUBLE;
+				*(uint32_t*)(out_buffer+offset+4) = num_events * 3 * sizeof(double);
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: first data block at offset: %d.", offset);
+
+				offset += 8;
+				ev_ind = 0;
+				for(i = 0; i < start_count; i++) {
+					if(!(current_start = this->measures[measure_number]->get_start(i))) {
+						syslog(ATMD_ERR, "Measure [save_measure]: trying to stat a non existent start.");
+						return -1;
+					}
+					for(j = 0; j < current_start->count_stops(); j++) {
+						current_start->get_channel(j, channel);
+						current_start->get_stoptime(j, stoptime);
+						*(double*)(out_buffer+offset+(ev_ind+num_events*0)*sizeof(double)) = double(i+1);
+						*(double*)(out_buffer+offset+(ev_ind+num_events*1)*sizeof(double)) = double(channel);
+						*(double*)(out_buffer+offset+(ev_ind+num_events*2)*sizeof(double)) = stoptime;
+						ev_ind++;
+					}
+				}
+
+				/* Setup second data header - Measurement timestamp */
+				offset += num_events * 3 * sizeof(double);
+				*(uint32_t*)(out_buffer+offset) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset+4) = 72;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: second data header at offset: %d.", offset);
+
+				/* Flags */
+				offset += 8;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = mxUINT32_CLASS;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: second flags at offset: %d.", offset);
+
+				/* Dimensions */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = 1;
+				*(uint32_t*)(out_buffer+offset+12) = 2;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: second dimensions at offset: %d.", offset);
+
+				/* Array name */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miINT8;
+				*(uint32_t*)(out_buffer+offset+4) = 9;
+				memcpy(out_buffer+offset+8, "timestamp", 9);
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: second array name at offset: %d.", offset);
+
+				/* Array content */
+				offset += 24;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = measure_begin.tv_sec;
+				*(uint32_t*)(out_buffer+offset+12) = measure_begin.tv_usec;
+
+				syslog(ATMD_DEBUG, "Measure [save_measure]: second data block at offset: %d.", offset);
+
+				/* Setup effective measurement time data header */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset+4) = 64;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third data header at offset: %d.", offset);
+
+				/* Flags */
+				offset += 8;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = mxUINT32_CLASS;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third flags at offset: %d.", offset);
+
+				/* Dimensions */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = 1;
+				*(uint32_t*)(out_buffer+offset+12) = 2;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third dimensions at offset: %d.", offset);
+
+				/* Array name */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miINT8;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				memcpy(out_buffer+offset+8, "tot_time", 8);
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third array name at offset: %d.", offset);
+
+				/* Array content */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				if(measure_end.tv_usec - measure_begin.tv_usec < 0) {
+					*(uint32_t*)(out_buffer+offset+8) = measure_end.tv_sec - measure_begin.tv_sec - 1;
+					*(uint32_t*)(out_buffer+offset+12) = measure_end.tv_usec + 1000000 - measure_begin.tv_usec;
+				} else {
+					*(uint32_t*)(out_buffer+offset+8) = measure_end.tv_sec - measure_begin.tv_sec;
+					*(uint32_t*)(out_buffer+offset+12) = measure_end.tv_usec - measure_begin.tv_usec;
+				}
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third data block at offset: %d.", offset);
+
+				/* Save buffer to output file */
+				savefile.write((char *)out_buffer, total_size);
+
+				/* Free output buffer */
+				delete out_buffer;
 			}
 			break;
+
+		case ATMD_FORMAT_MATPS2_FTP:
+		case ATMD_FORMAT_MATPS2: /* Matlab format with separate variables for start, channel and stoptime */
+
+			/* First of all we should count all the events */
+			num_events = 0;
+			for(i = 0; i < start_count; i++) {
+				if(!(current_start = this->measures[measure_number]->get_start(i))) {
+					syslog(ATMD_ERR, "Measure [save_measure]: trying to stat a non existent start.");
+					return -1;
+				}
+				num_events += current_start->count_stops();
+			}
+
+			/* Format the timestamp */
+			current_time = time(NULL);
+			date_str = ctime(&current_time);
+
+			/* Compute the size of the mat */
+			len_st = sizeof(uint32_t) * num_events;
+			if((len_st % 8) != 0)
+				len_st = ((len_st / 8) + 1) * 8;
+			len_ch = sizeof(int8_t) * num_events;
+			if((len_ch % 8) != 0)
+				len_ch = ((len_ch / 8) + 1) * 8;
+
+			total_size = 128 + 64 * 3 + 72 + 64 + len_st + len_ch + num_events * sizeof(double) + 8 + 8;
+
+			syslog(ATMD_INFO, "Measure [save_measure]: saving measure to MAT file, with separate vars for start, channel and stoptime.");
+			syslog(ATMD_INFO, "Measure [save_measure]: - total size: %d. total events: %d.", total_size, num_events);
+
+			/* Allocate buffer */
+			out_buffer = new uint8_t[total_size];
+			if(out_buffer == NULL) {
+				syslog(ATMD_ERR, "Measure [save_measure]: failed to allocate output buffer.");
+				return -1;
+
+			} else {
+				memset(out_buffer, 0x00, total_size);
+
+				/* Offset var for convenience... */
+				offset = 0;
+
+				/* Setup header */
+				memset(out_buffer, 0x20, 128);
+				memcpy(out_buffer, MAT_HEADER, strlen(MAT_HEADER));
+				memcpy(out_buffer+strlen(MAT_HEADER), date_str, strlen(date_str));
+				*(uint8_t*)(out_buffer+124) = MAT_VERSION_1B;
+				*(uint8_t*)(out_buffer+125) = MAT_VERSION_2B;
+				*(uint16_t*)(out_buffer+126) = MAT_ENDIAN;
+
+				/* Offset setup */
+				offset += 128;
+				offset_ch = offset + 64 + len_st;
+				offset_st = offset_ch + 64 + len_ch;
+
+				/* Setup first three data headers - For actual measurement data */
+				*(uint32_t*)(out_buffer+offset) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset+4) = 56 + len_st;
+				*(uint32_t*)(out_buffer+offset_ch) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset_ch+4) = 56 + len_ch;
+				*(uint32_t*)(out_buffer+offset_st) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset_st+4) = 56 + sizeof(double) * num_events;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: data header at offsets: %d, %d, %d.", offset, offset_ch, offset_st);
+
+				/* Flags */
+				offset += 8;
+				offset_ch += 8;
+				offset_st += 8;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = mxUINT32_CLASS;
+				*(uint32_t*)(out_buffer+offset_ch) = miUINT32;
+				*(uint32_t*)(out_buffer+offset_ch+4) = 8;
+				*(uint32_t*)(out_buffer+offset_ch+8) = mxINT8_CLASS;
+				*(uint32_t*)(out_buffer+offset_st) = miUINT32;
+				*(uint32_t*)(out_buffer+offset_st+4) = 8;
+				*(uint32_t*)(out_buffer+offset_st+8) = mxDOUBLE_CLASS;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: data flags at offsets: %d, %d, %d.", offset, offset_ch, offset_st);
+
+				/* Dimensions */
+				offset += 16;
+				offset_ch += 16;
+				offset_st += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = num_events;
+				*(uint32_t*)(out_buffer+offset+12) = 1;
+				*(uint32_t*)(out_buffer+offset_ch) = miUINT32;
+				*(uint32_t*)(out_buffer+offset_ch+4) = 8;
+				*(uint32_t*)(out_buffer+offset_ch+8) = num_events;
+				*(uint32_t*)(out_buffer+offset_ch+12) = 1;
+				*(uint32_t*)(out_buffer+offset_st) = miUINT32;
+				*(uint32_t*)(out_buffer+offset_st+4) = 8;
+				*(uint32_t*)(out_buffer+offset_st+8) = num_events;
+				*(uint32_t*)(out_buffer+offset_st+12) = 1;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: data dimensions at offsets: %d, %d, %d.", offset, offset_ch, offset_st);
+
+				/* Array name */
+				offset += 16;
+				offset_ch += 16;
+				offset_st += 16;
+				*(uint32_t*)(out_buffer+offset) = miINT8;
+				*(uint32_t*)(out_buffer+offset+4) = 5;
+				*(uint32_t*)(out_buffer+offset_ch) = miINT8;
+				*(uint32_t*)(out_buffer+offset_ch+4) = 7;
+				*(uint32_t*)(out_buffer+offset_st) = miINT8;
+				*(uint32_t*)(out_buffer+offset_st+4) = 8;
+				memcpy(out_buffer+offset+8, "start", 5);
+				memcpy(out_buffer+offset_ch+8, "channel", 7);
+				memcpy(out_buffer+offset_st+8, "stoptime", 8);
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: data array names at offsets: %d, %d, %d.", offset, offset_ch, offset_st);
+
+				/* Array content */
+				offset += 16;
+				offset_ch += 16;
+				offset_st += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = num_events * sizeof(uint32_t);
+				*(uint32_t*)(out_buffer+offset_ch) = miINT8;
+				*(uint32_t*)(out_buffer+offset_ch+4) = num_events * sizeof(int8_t);
+				*(uint32_t*)(out_buffer+offset_st) = miDOUBLE;
+				*(uint32_t*)(out_buffer+offset_st+4) = num_events * sizeof(double);
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: data blocks at offsets: %d, %d, %d.", offset, offset_ch, offset_st);
+
+				offset += 8;
+				offset_ch += 8;
+				offset_st += 8;
+				ev_ind = 0;
+				for(i = 0; i < start_count; i++) {
+					if(!(current_start = this->measures[measure_number]->get_start(i))) {
+						syslog(ATMD_ERR, "Measure [save_measure]: trying to stat a non existent start.");
+						return -1;
+					}
+					for(j = 0; j < current_start->count_stops(); j++) {
+						current_start->get_channel(j, channel);
+						current_start->get_stoptime(j, stoptime);
+						*(uint32_t*)(out_buffer+offset+ev_ind*sizeof(uint32_t)) = i+1;
+						*(int8_t*)(out_buffer+offset_ch+ev_ind*sizeof(int8_t)) = channel;
+						*(double*)(out_buffer+offset_st+ev_ind*sizeof(double)) = stoptime;
+						ev_ind++;
+					}
+				}
+
+				/* Setup timestamp data header */
+				offset = offset_st + num_events * sizeof(double);
+				*(uint32_t*)(out_buffer+offset) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset+4) = 72;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: second data header at offset: %d.", offset);
+
+				/* Flags */
+				offset += 8;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = mxUINT32_CLASS;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: second flags at offset: %d.", offset);
+
+				/* Dimensions */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = 1;
+				*(uint32_t*)(out_buffer+offset+12) = 2;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: second dimensions at offset: %d.", offset);
+
+				/* Array name */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miINT8;
+				*(uint32_t*)(out_buffer+offset+4) = 9;
+				memcpy(out_buffer+offset+8, "timestamp", 9);
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: second array name at offset: %d.", offset);
+
+				/* Array content */
+				offset += 24;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = measure_begin.tv_sec;
+				*(uint32_t*)(out_buffer+offset+12) = measure_begin.tv_usec;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: second data block at offset: %d.", offset);
+
+				/* Setup effective measurement time data header */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miMATRIX;
+				*(uint32_t*)(out_buffer+offset+4) = 64;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third data header at offset: %d.", offset);
+
+				/* Flags */
+				offset += 8;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = mxUINT32_CLASS;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third flags at offset: %d.", offset);
+
+				/* Dimensions */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				*(uint32_t*)(out_buffer+offset+8) = 1;
+				*(uint32_t*)(out_buffer+offset+12) = 2;
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third dimensions at offset: %d.", offset);
+
+				/* Array name */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miINT8;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				memcpy(out_buffer+offset+8, "tot_time", 8);
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third array name at offset: %d.", offset);
+
+				/* Array content */
+				offset += 16;
+				*(uint32_t*)(out_buffer+offset) = miUINT32;
+				*(uint32_t*)(out_buffer+offset+4) = 8;
+				if(measure_end.tv_usec - measure_begin.tv_usec < 0) {
+					*(uint32_t*)(out_buffer+offset+8) = measure_end.tv_sec - measure_begin.tv_sec - 1;
+					*(uint32_t*)(out_buffer+offset+12) = measure_end.tv_usec + 1000000 - measure_begin.tv_usec;
+				} else {
+					*(uint32_t*)(out_buffer+offset+8) = measure_end.tv_sec - measure_begin.tv_sec;
+					*(uint32_t*)(out_buffer+offset+12) = measure_end.tv_usec - measure_begin.tv_usec;
+				}
+
+				if(enable_debug)
+					syslog(ATMD_DEBUG, "Measure [save_measure]: third data block at offset: %d.", offset);
+
+
+				if(format == ATMD_FORMAT_MATPS2 || format == ATMD_FORMAT_MATPS2_ALL) {
+					/* Save buffer to output file */
+					savefile.write((char *)out_buffer, total_size);
+				}
+
+				if(format == ATMD_FORMAT_MATPS2_FTP || format == ATMD_FORMAT_MATPS2_ALL) {
+					/* Save to remote computer via libcurl */
+					struct curl_buffer curl_data;
+					curl_data.size = total_size;
+					curl_data.ptr = 0;
+					curl_data.buffer = out_buffer;
+
+					// Configure FTP in binary mode
+					struct curl_slist *headerlist = NULL;
+					headerlist = curl_slist_append(headerlist, "TYPE I");
+					curl_easy_setopt(this->easy_handle, CURLOPT_QUOTE, headerlist);
+
+					// Setup of CURL options
+					curl_easy_setopt(this->easy_handle, CURLOPT_READFUNCTION, curl_read);
+					curl_easy_setopt(this->easy_handle, CURLOPT_UPLOAD, 1L);
+					curl_easy_setopt(this->easy_handle, CURLOPT_URL, fullurl.c_str());
+					curl_easy_setopt(this->easy_handle, CURLOPT_READDATA, (void*) &curl_data);
+					curl_easy_setopt(this->easy_handle, CURLOPT_INFILESIZE_LARGE, (curl_off_t)total_size);
+
+					syslog(ATMD_INFO, "Measure [save_measure]: remotely saving measurement to \"%s/%s\".", this->host.c_str(), filename.c_str());
+
+					if(enable_debug)
+						syslog(ATMD_DEBUG, "Measure [save_measure]: full url: %s.", fullurl.c_str());
+
+					// Start network transfer
+					struct timeval t_begin, t_end;
+					gettimeofday(&t_begin, NULL);
+
+					if(curl_easy_perform(this->easy_handle)) {
+						syslog(ATMD_ERR, "Measure [save_measure]: failed to transfer file with libcurl with error \"%s\".", this->curl_error);
+						return -1;
+					}
+
+					// We measure elapsed time for statistic purposes
+					gettimeofday(&t_end, NULL);
+					syslog(ATMD_INFO, "Measure [save_measure]: remote save performed in %fs.", (double)(t_end.tv_sec - t_begin.tv_sec) + (double)(t_end.tv_usec - t_begin.tv_usec) / 1e6);
+				}
+
+				/* Free output buffer */
+				delete out_buffer;
+			}
+			break;
+
+		case ATMD_FORMAT_MATRAW: /* Raw Matlab format with separate variables for start, channel, retriger count and stoptime */
+			syslog(ATMD_ERR, "Measure [save_measure]: raw MAT format is not yet implemented.");
+			return -1;
+			break;
 	}
-	savefile.close();
+
+	if(format != ATMD_FORMAT_MATPS2_FTP)
+		savefile.close();
 
 	return 0;
 }
 
 
-/* @fn ATMDboard::compute_stoptime(uint32_t measure_number, StopData& stop, uint32_t start01, double& stoptime)
- * Compute the stop time in ps.
+/* @fn curl_read(void *ptr, size_t size, size_t count, void *data)
+ * Read callback for curl network transfers
  *
- * @param measure_number The number of the measure that we want to save.
- * @param stop The stop object
- * @param start01 The start01 value
- * @param stoptime The return value
+ * @param ptr Pointer to the curl output buffer
+ * @param size Size of the data block
+ * @param count Number of data block to copy
+ * @param data Pointer to the input data structure
+ * @return Return the number of bytes copied to ptr buffer
  */
-void ATMDboard::compute_stoptime(uint32_t measure_number, StopData& stop, uint32_t start01, double& stoptime) {
-	if(stop.get_startcount() == 1) {
-		stoptime = (double)(stop.get_bins() + start01) * this->measures[measure_number].get_tbin();
+static size_t curl_read(void *ptr, size_t size, size_t count, void *data) {
+	// Restore pointer to buffer struct
+	struct curl_buffer* curl_data = (struct curl_buffer *)data;
 
-	} else if(stop.get_startcount() > 0) {
-		stoptime = (double)(stop.get_bins() + start01) * this->measures[measure_number].get_tbin() + (double)(stop.get_startcount() - 1) * (ATMD_AUTORETRIG + 1) * ATMD_TREF * 1e12;
-
+	// Check number of byte to copy
+	uint32_t b2read = 0;
+	if(curl_data->ptr + size * count <= curl_data->size) {
+		b2read = size * count;
 	} else {
-		stoptime = (double)stop.get_bins() * this->measures[measure_number].get_tbin();
+		b2read = curl_data->size - curl_data->ptr;
 	}
-}
 
+	if(enable_debug)
+		syslog(ATMD_DEBUG, "[curl_read] transferring bytes from %d to %d of %d.", curl_data->ptr, curl_data->ptr+b2read, curl_data->size);
 
-/* @fn ATMDboard::compute_stoptime(uint32_t measure_number, StopData& stop, uint32_t start01, double& stoptime, uint64_t& start_count)
- * Compute the stop time in raw format.
- *
- * @param measure_number The number of the measure that we want to save.
- * @param stop The stop object
- * @param start01 The start01 value
- * @param stoptime The returned stoptime in ps (without start autoretriggers)
- * @param start_count The returet count of autoretriggers (in unit of ATMD_TREF)
- */
-void ATMDboard::compute_stoptime(uint32_t measure_number, StopData& stop, uint32_t start01, double& stoptime, uint32_t& start_count) {
-	if(stop.get_startcount() == 1) {
-		stoptime = (double)(stop.get_bins() + start01) * this->measures[measure_number].get_tbin();
-		start_count = 0;
+	// Copy data
+	if(b2read > 0)
+		memcpy(ptr, (void *)(curl_data->buffer+curl_data->ptr), b2read);
 
-	} else if(stop.get_startcount() > 0) {
-		stoptime = (double)(stop.get_bins() + start01) * this->measures[measure_number].get_tbin();
-		start_count = stop.get_startcount() - 1;
+	// Update buffer pointer
+	curl_data->ptr += b2read;
 
-	} else {
-		stoptime = (double)stop.get_bins() * this->measures[measure_number].get_tbin();
-		start_count = 0;
-	}
+	// Return number of byte copied to buffer
+	return (size_t)b2read;
 }
 
 
@@ -959,11 +1481,11 @@ int ATMDboard::stat_measure(uint32_t measure_number, uint32_t& starts) {
 
 	// Check if the measure number is valid.
 	if(measure_number < 0 || measure_number >= this->num_measures()) {
-		syslog(ATMD_ERR, "Measure [stat_measure]: trying to get statistics about a non exsitent measure.");
+		syslog(ATMD_ERR, "Measure [stat_measure]: trying to get statistics about a non existent measure.");
 		return -1;
 	}
 
-	starts = this->measures[measure_number].count_starts();
+	starts = this->measures[measure_number]->count_starts();
 	return 0;
 }
 
@@ -979,26 +1501,29 @@ int ATMDboard::stat_stops(uint32_t measure_number, vector< vector<uint32_t> >& s
 
 	// Check if the measure number is valid.
 	if(measure_number < 0 || measure_number >= this->num_measures()) {
-		syslog(ATMD_ERR, "Measure [stat_stops]: trying to get statistics about a non exsitent measure.");
+		syslog(ATMD_ERR, "Measure [stat_stops]: trying to get statistics about a non existent measure.");
 		return -1;
 	}
 
 	vector<uint32_t> stops_ch(9,0);
 	int i, j;
-	StartData current_start;
-	StopData current_stop;
+	StartData* current_start;
 
 	// We cycle over all starts
-	for(i = 0; i < this->measures[measure_number].count_starts(); i++) {
-		current_start = this->measures[measure_number].get_start(i);
+	for(i = 0; i < this->measures[measure_number]->count_starts(); i++) {
+		if(!(current_start = this->measures[measure_number]->get_start(i))) {
+			syslog(ATMD_ERR, "Measure [stat_stops]: trying to stat a non existent start.");
+			return -1;
+		}
 
 		// We save the measure time
-		stops_ch[0] = (uint32_t)(current_start.get_time() / (uint64_t)(((ATMD_AUTORETRIG + 1) * 25) / 1000));
+		stops_ch[0] = (uint32_t)(current_start->get_time() / (uint64_t)(((ATMD_AUTORETRIG + 1) * 25) / 1000));
 
 		// We cycle over all stops of current start
-		for(j = 0; j < current_start.count_stops(); j++) {
-			current_stop = current_start.get_stop(j);
-			stops_ch[current_stop.get_channel()]++;
+		for(j = 0; j < current_start->count_stops(); j++) {
+			int8_t ch;
+			current_start->get_channel(j, ch);
+			stops_ch[(ch > 0) ? ch : -ch]++;
 		}
 
 		// We add the vector with counts to the output
@@ -1024,7 +1549,7 @@ int ATMDboard::stat_stops(uint32_t measure_number, vector< vector<uint32_t> >& s
 
 	// Check if the measure number is valid.
 	if(measure_number < 0 || measure_number >= this->num_measures()) {
-		syslog(ATMD_ERR, "Measure [stat_stops]: trying to get statistics about a non exsitent measure.");
+		syslog(ATMD_ERR, "Measure [stat_stops]: trying to get statistics about a non existent measure.");
 		return -1;
 	}
 
@@ -1041,25 +1566,27 @@ int ATMDboard::stat_stops(uint32_t measure_number, vector< vector<uint32_t> >& s
 	vector<uint32_t> stops_ch(9,0);
 	int i, j;
 	double stoptime;
-	StartData current_start;
-	StopData current_stop;
+	StartData* current_start;
 
 	// We cycle over all starts
-	for(i = 0; i < this->measures[measure_number].count_starts(); i++) {
-		current_start = this->measures[measure_number].get_start(i);
+	for(i = 0; i < this->measures[measure_number]->count_starts(); i++) {
+		if(!(current_start = this->measures[measure_number]->get_start(i))) {
+			syslog(ATMD_ERR, "Measure [stat_stops]: trying to stat a non existent start.");
+			return -1;
+		}
 
 		// We save the measure time
-		stops_ch[0] = (uint32_t)(current_start.get_time() / (uint64_t)(((ATMD_AUTORETRIG + 1) * 25) / 1000));
+		stops_ch[0] = (uint32_t)(current_start->get_time() / (uint64_t)(((ATMD_AUTORETRIG + 1) * 25) / 1000));
 
 		// We cycle over all stops of current start
-		for(j = 0; j < current_start.count_stops(); j++) {
-			current_stop = current_start.get_stop(j);
-
-			// We compute the stop time to compare it to the window
-			this->compute_stoptime(measure_number, current_stop, current_start.get_start01(), stoptime);
+		for(j = 0; j < current_start->count_stops(); j++) {
+			int8_t ch;
+			double stoptime;
+			current_start->get_channel(j, ch);
+			current_start->get_stoptime(j, stoptime);
 
 			if(stoptime > window_start.get_ps() && stoptime < window_start.get_ps()+window_amplitude.get_ps())
-				stops_ch[current_stop.get_channel()]++;
+				stops_ch[(ch > 0) ? ch : -ch]++;
 		}
 
 		// We add the vector with counts to the output
@@ -1070,5 +1597,171 @@ int ATMDboard::stat_stops(uint32_t measure_number, vector< vector<uint32_t> >& s
 			stops_ch[j] = 0;
 	}
 
+	return 0;
+}
+
+
+/* @fn ATMDboard::measure_autorestart(int err_status)
+ * Manage the autorestart process. In detail it will save the previous measure, then it will delete it,
+ * recollect thread status and restart another measure.
+ *
+ * @return Return 0 on success, -1 on error.
+ */
+int ATMDboard::measure_autorestart(int err_status) {
+	// We should get some statistics about lost time so we measure the time we need to restart a measurement
+	struct timeval t_begin, t_end;
+
+	// We initialize to zero the time structures so if the gettimeofday fail we do not get some absurd time but instead zero.
+	memset(&t_begin, 0x00, sizeof(struct timeval));
+	memset(&t_end, 0x00, sizeof(struct timeval));
+	gettimeofday(&t_begin, NULL);
+
+	if(err_status == ATMD_ERR_NONE) {
+		/* First thing to do is to save the last measurement */
+		uint32_t measure_id = this->measures.size()-1; // We get the last measurement id
+
+		// We format the filename
+		stringstream file_number(stringstream::out);
+		file_number.width(4);
+		file_number.fill('0');
+		file_number << this->measure_counter;
+
+		string filename = this->fileprefix + "_" + file_number.str();
+
+		if(enable_debug)
+			syslog(ATMD_DEBUG, "Measure [measure_autorestart]: autosaving measure to file \"%s\".", filename.c_str());
+
+		switch(this->auto_format) {
+			case ATMD_FORMAT_RAW:
+			case ATMD_FORMAT_PS:
+			case ATMD_FORMAT_US:
+			case ATMD_FORMAT_DEBUG:
+			default:
+				filename += ".txt";
+				break;
+
+			case ATMD_FORMAT_BINPS:
+			case ATMD_FORMAT_BINRAW:
+				filename += ".dat";
+				break;
+
+			case ATMD_FORMAT_MATPS1:
+			case ATMD_FORMAT_MATPS2:
+			case ATMD_FORMAT_MATRAW:
+			case ATMD_FORMAT_MATPS2_FTP:
+			case ATMD_FORMAT_MATPS2_ALL:
+				filename += ".mat";
+				break;
+		}
+
+		if(this->save_measure(measure_id, filename, this->auto_format)) {
+			// Measure autosave failed
+			syslog(ATMD_ERR, "Measure [measure_autorestart]: failed to autosave measure %u to file \"%s\" with format %u.", measure_id, filename.c_str(), this->auto_format);
+
+			// We set autostart to disabled because we are aborting and board status to error
+			this->autostart = ATMD_AUTOSTART_DISABLED;
+			this->board_status = ATMD_STATUS_ERROR;
+			return -1;
+		}
+
+		// We increment the measure counter so we do not overwrite previous measurements
+		this->measure_counter++;
+		this->autostart_counter++;
+
+		// Then we delete from memory the measure we just saved
+		if(this->del_measure(measure_id)) {
+			// Measure deletion failed
+			syslog(ATMD_ERR, "Measure [measure_autorestart]: failed to delete measure %u (total number of measurements %u)", measure_id, (uint32_t)this->measures.size());
+
+			// We set autostart to disabled because we are aborting and board status to error
+			this->autostart = ATMD_AUTOSTART_DISABLED;
+			this->board_status = ATMD_STATUS_ERROR;
+			return -1;
+		}
+
+		// Then we recollect the previous thread status, but we should do this only if the status is ATMD_STATUS_FINISHED
+		if(this->board_status == ATMD_STATUS_FINISHED) {
+			int retval = 0;
+			if(this->collect_measure(retval)) {
+				// Preavious thread recollection failed
+				syslog(ATMD_ERR, "Measure [measure_autorestart]: failed to recollect previous thread status.");
+
+				// We set autostart to disabled because we are aborting and board status to error
+				this->autostart = ATMD_AUTOSTART_DISABLED;
+				this->board_status = ATMD_STATUS_ERROR;
+				return -1;
+			}
+			this->board_status = ATMD_STATUS_IDLE;
+		}
+	}
+
+	// Check if we have reached autostart range
+	if(!this->auto_range.is_zero()) {
+		if(this->auto_range.is_raw()) {
+			if(this->auto_range.get_raw() < this->autostart_counter)
+				this->autostart = ATMD_AUTOSTART_STOP;
+
+		} else {
+			struct timeval autostart_end;
+			gettimeofday(&autostart_end, NULL);
+			if(autostart_end.tv_sec - this->autostart_begin.tv_sec > this->auto_range.get_sec())
+				this->autostart = ATMD_AUTOSTART_STOP;
+		}
+	}
+
+	if(this->autostart == ATMD_AUTOSTART_STOP) {
+		// If autostart status is set to STOP this is the time to disable it completely
+		this->autostart = ATMD_AUTOSTART_DISABLED;
+
+	} else {
+		// Now we can start the next measurement
+		if(this->start_measure()) {
+			// Measure starting failed
+			syslog(ATMD_ERR, "Measure [measure_autorestart]: failed to start a new measurement.");
+
+			// We set autostart to disabled because we are aborting and board status to error
+			this->autostart = ATMD_AUTOSTART_DISABLED;
+			this->board_status = ATMD_STATUS_ERROR;
+			return -1;
+		}
+	}
+
+	gettimeofday(&t_end, NULL);
+	syslog(ATMD_INFO, "Measure [measure_autorestart]: restart done in %fs.", (double)(t_end.tv_sec - t_begin.tv_sec) + (double)(t_end.tv_usec - t_begin.tv_usec) / 1e6);
+
+	return 0;
+}
+
+
+/* @fn ATMDboard::set_autorange(string& timestr)
+ * Set the autostart range, checking that the supplied time is not less than measure time.
+ *
+ * @param timestr A string representing the autostart range.
+ * @return Return 0 on success, -1 on error.
+ */
+int ATMDboard::set_autorange(string& timestr) {
+	if(this->auto_range.set(timestr)) {
+		return -1;
+	}
+
+	if(this->measure_time.is_zero()) {
+		syslog(ATMD_ERR, "Config [set_autorange]: error setting autorestart range. The measure time is not set.");
+		return -1;
+	}
+
+	if(!this->auto_range.is_raw() && !this->auto_range.is_zero()) {
+		// We check that the saved time make sense and that is greater than measure time
+		uint32_t tot_time = this->auto_range.get_sec() + uint32_t(round(double(this->auto_range.get_usec())/1e6));
+		uint32_t meas_time = this->measure_time.get_sec() + uint32_t(round(double(this->measure_time.get_usec())/1e6));
+		if(tot_time <= meas_time) {
+			syslog(ATMD_ERR, "Config [set_autorange]: error setting autorestart range. The supplied time (%ds) is not greater than measure time (%ds).", tot_time, meas_time);
+			return -1;
+		}
+		stringstream autotime(stringstream::out);
+		autotime << tot_time << "s";
+		if(enable_debug)
+			syslog(ATMD_DEBUG, "Config [set_autorange]: rounding autostart range to \"%s\".", autotime.str().c_str());
+		this->auto_range.set(autotime.str());
+	}
 	return 0;
 }

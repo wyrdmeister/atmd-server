@@ -2,17 +2,17 @@
 /*
  * atmd_hardware.h
  * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
- * 
+ *
  * main.cc is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * main.cc is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -33,7 +33,7 @@ class ATMDboard {
 
 	public:
 	ATMDboard();
-	~ATMDboard() {};
+	~ATMDboard() { curl_easy_cleanup(this->easy_handle); };
 
 	// Initialize board
 	int init(bool simulate);
@@ -89,13 +89,17 @@ class ATMDboard {
 
 	// MEASURE MANAGEMENT INTERFACE
 	// Add a measure
-	int add_measure(Measure& measure);
+	int add_measure(Measure* measure);
 
 	// Delete a measure
 	int del_measure(uint32_t measure_number);
 
 	// Clear all measures
-	void clear_measures() { this->measures.clear(); };
+	void clear_measures() {
+		for(uint32_t i = 0; i < this->measures.size(); i++)
+			delete measures[i];
+		this->measures.clear();
+	};
 
 	// Return the number of measures saved
 	int num_measures() { return this->measures.size(); };
@@ -118,6 +122,32 @@ class ATMDboard {
 	// Board status interface
 	void set_status(int status) { this->board_status = status; };
 	int get_status() { return this->board_status; };
+
+	// Board autostart interface
+	void set_autostart(int status) { this->autostart = status; };
+	int get_autostart() { return this->autostart; };
+	void set_prefix(string& prefix) { this->fileprefix = prefix; this->measure_counter = 0; };
+	string& get_prefix() { return this->fileprefix; };
+	int set_autorange(string& timestr);
+	string get_autorange() { return this->auto_range.get(); };
+	void set_autoformat(uint32_t format) { this->auto_format = format; };
+	uint32_t get_autoformat() { return this->auto_format; };
+	int reset_autostart_counters() {
+		this->autostart_counter = 0;
+		memset(&(this->autostart_begin), 0x00, sizeof(struct timeval));
+		return gettimeofday(&(this->autostart_begin), NULL);
+	};
+
+	// Function that manage the complete autorestart process
+	int measure_autorestart(int err_status);
+
+	// FTP save interface
+	void set_host(string& address) { this->host = address; };
+	void set_user(string& user) { this->username = user; };
+	void set_password(string& psw) { this->password = psw; };
+	string& get_host() { return this->host; };
+	string& get_user() { return this->username; };
+	bool psw_set() { return (this->password != ""); };
 
 	// Interface to stop a measure
 	void set_stop(bool stop) { this->measure_stop = stop; };
@@ -148,6 +178,13 @@ class ATMDboard {
 
 
 	private:
+	// CURL easy handle
+	CURL* easy_handle;
+	char curl_error[CURL_ERROR_SIZE];
+	string host;
+	string username;
+	string password;
+
 	// Board base address
 	uint16_t base_address;
 
@@ -191,7 +228,7 @@ class ATMDboard {
 	Timings measure_window;
 
 	// Measure data
-	vector <Measure> measures;
+	vector<Measure*> measures;
 
 	// Measure thread information
 	pthread_t tid;
@@ -199,6 +236,15 @@ class ATMDboard {
 	// Board status variables
 	int board_status;
 	bool measure_stop;
+
+	// Autorestart variables
+	int autostart;
+	string fileprefix;
+	Timings auto_range;
+	uint32_t auto_format;
+	uint32_t measure_counter;
+	uint32_t autostart_counter;
+	struct timeval autostart_begin;
 
 	// Private functions
 
@@ -211,10 +257,18 @@ class ATMDboard {
 	// Utility function to write board configuration registers
 	void write_register(uint32_t value);
 
-	// Utility functions to calculate stoptimes
-	void compute_stoptime(uint32_t measure_number, StopData& stop, uint32_t start01, double& stoptime);
-	void compute_stoptime(uint32_t measure_number, StopData& stop, uint32_t start01, double& stoptime, uint32_t& start_count);
+};
 
+
+	// Callback for curl transfers
+	static size_t curl_read(void *ptr, size_t size, size_t count, void *data);
+
+
+/* Structure to pass a data buffer to curl for network transfer */
+struct curl_buffer {
+	uint32_t size;
+	uint32_t ptr;
+	uint8_t* buffer;
 };
 
 #endif

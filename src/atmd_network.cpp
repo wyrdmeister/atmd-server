@@ -2,17 +2,17 @@
 /*
  * atmd_network.cpp
  * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
- * 
+ *
  * main.cc is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * main.cc is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -32,7 +32,7 @@ Network::Network() {
 	listen_socket = NULL;
 	client_socket = NULL;
 	valid_commands.clear();
-	
+
 	// Valid commands - ATMD protocol version 2.0
 	valid_commands.push_back("SET");
 	valid_commands.push_back("GET");
@@ -129,7 +129,7 @@ int Network::accept_client() {
 
 			// An error occurred
 			} else {
-				syslog(ATMD_ERR, "Network [accept]: accept failed. (Error: %m).");
+				syslog(ATMD_ERR, "Network [accept]: accept failed (Error: %m).");
 				this->client_socket = 0;
 				return -1;
 			}
@@ -154,36 +154,32 @@ int Network::accept_client() {
 
 
 /* @fn Network::get_command(string& command)
- * This function loops waiting for a valid command.
+ * This function search for a valid command.
  *
  * @param command A reference to a string variable for returning the recieved command.
- * @return Return 0 on success, throw an exception on error or on terminate interrupt.
+ * @return Return 0 on success, -1 on empty recv buffer, throw an exception on error or on terminate interrupt.
  */
 int Network::get_command(string& command) {
-	
-	// Set a sleeptime of 1ms between attempts to fill the buffer
-	struct timespec sleeptime;
-	sleeptime.tv_sec = 0;
-	sleeptime.tv_nsec = 1000000;
-
 	try {
-		
+
+		int retval;
 		do {
+			// First of all we check if there is something on the network
+			retval = this->fill_buffer();
+
 			// If the buffer is not empty try to find a command
 			if(this->recv_buffer.size() > 0)
 				if(this->check_buffer(command) == 0)
 					// We have the command!
 					return 0;
-			
-			// Otherwise we try to fill the buffer
-			if(this->fill_buffer())
-				// There's no data on the network. We sleep for a while...
-				nanosleep(&sleeptime, NULL);
 
 			if(terminate_interrupt)
 				throw(ATMD_ERR_TERM);
 
-		} while(true);
+		} while(retval != -1);
+
+		// There's no data on the network, so we return to the main cycle...
+		return -1;
 
 	} catch(int e) {
 		// Handle exceptions... the only thing that we can do here is to log what happened.
@@ -223,7 +219,7 @@ int Network::send_command(string command) {
 
 	// We keep a copy of the original command for the logs
 	string orig_command = command;
-	
+
 	// We add at the end of the command the \r\n termination characters
 	command.append("\r\n");
 	int sent = 0;
@@ -319,8 +315,8 @@ int Network::check_buffer(string& command) {
 int Network::fill_buffer() {
 	char buffer[256];
 	int retval;
-	
-	retval = recv(this->client_socket, &buffer, sizeof(char)*256, 0);
+
+	retval = recv(this->client_socket, &buffer, sizeof(char)*256, MSG_DONTWAIT);
 	if(retval == -1 && (errno == EAGAIN || errno == EINTR)) {
 		// There is no data to receive...
 		return -1;
@@ -396,10 +392,13 @@ int Network::exec_command(string command, ATMDboard& board) {
 
 	// Data variables
 	uint32_t channel, rising, falling, refclkdiv, hsdiv, offset, measure_num, format;
-	string window_time, measure_time, filename, win_start, win_ampl;
+	string window_time, measure_time, filename, win_start, win_ampl, ftp_data;
 
 	// Configuration SET commands
 	if(main_command == "SET") {
+
+		// Replace commas with dots (commas are not recognized as decimal point)
+		pcrecpp::RE("\\,").GlobalReplace(".", &parameters);
 
 		// Catching channel setup command
 		cmd_re = "CH (\\d+) (\\d+) (\\d+)";
@@ -426,10 +425,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 		}
 
 		// Catching window time setup command
-		cmd_re = "ST ([0-9\\.\\,]+[umsMh]{1})";
-
-		// Replace commas with dots (commas are not recognized as decimal point)
-		pcrecpp::RE("\\,").GlobalReplace(".", &parameters);
+		cmd_re = "ST ([0-9\\.]+[umsMh]{1})";
 
 		if(cmd_re.FullMatch(parameters)) {
 			cmd_re.FullMatch(parameters, &window_time);
@@ -446,10 +442,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 		}
 
 		// Catching total measure time setup command
-		cmd_re = "TT ([0-9\\.\\,]+[umsMh]{0,1})";
-
-		// Replace commas with dots (commas are not recognized as decimal point)
-		pcrecpp::RE("\\,").GlobalReplace(".", &parameters);
+		cmd_re = "TT ([0-9\\.]+[umsMh]{0,1})";
 
 		if(cmd_re.FullMatch(parameters)) {
 			cmd_re.FullMatch(parameters, &measure_time);
@@ -471,7 +464,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 			cmd_re.FullMatch(parameters, &refclkdiv, &hsdiv);
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: setting resolution (ref: %d, hs: %d).", refclkdiv, hsdiv);
-			
+
 			// We check that the parameters are meaningful. We cannot change the resolution too much!
 			if(refclkdiv < 6 || hsdiv < 60) {
 				syslog(ATMD_ERR, "Network [exec_command]: the resolution parameters passed are meaningless (ref: %d, hs: %d).", refclkdiv, hsdiv);
@@ -489,15 +482,94 @@ int Network::exec_command(string command, ATMDboard& board) {
 			cmd_re.FullMatch(parameters, &offset);
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: setting offset to %d.", offset);
-			
+
 			// Start offset is truncated at a length of 18 bits
 			board.set_start_offset(offset & 0x0003FFFF);
 			this->send_command("ACK");
 			return 0;
 		}
 
+		// Set host for FTP transfers
+		cmd_re = "HOST ([a-zA-Z0-9\\.\\-]+)";
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &ftp_data);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP host to \"%s\".", ftp_data.c_str());
+
+			board.set_host(ftp_data);
+			this->send_command("ACK");
+			return 0;
+		}
+
+		// Set user for FTP transfers
+		cmd_re = "USER ([a-zA-Z0-9\\.]+)";
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &ftp_data);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP username to \"%s\".", ftp_data.c_str());
+
+			board.set_user(ftp_data);
+			this->send_command("ACK");
+			return 0;
+		}
+
+		// Set password for FTP transfers
+		cmd_re = "PSW ([a-zA-Z0-9]+)";
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &ftp_data);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP password.");
+
+			board.set_password(ftp_data);
+			this->send_command("ACK");
+			return 0;
+		}
+
+		// Set filename prefix for measure autorestart (with relative path...)
+		cmd_re = "PREFIX ([a-zA-Z0-9\\.\\_\\-\\/]+)";
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &filename);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting autostart file prefix \"%s\".", filename.c_str());
+
+			board.set_prefix(filename);
+			this->send_command("ACK");
+			return 0;
+		}
+
+		// Set total autorestart measurement time
+		cmd_re = "AUTORANGE ([0-9\\.]+[sMh]{0,1})";
+
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &measure_time);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting total autorestart measurement time to \"%s\".", measure_time.c_str());
+
+			if(board.set_autorange(measure_time)) {
+				syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as the total measurement time (\"%s\")", measure_time.c_str());
+				this->send_command(this->format_command("ERR %d", ATMD_NETERR_BAD_TIMESTR));
+			} else {
+				this->send_command("ACK");
+			}
+			return 0;
+		}
+
+		// Set autorestart save format
+		cmd_re = "AUTOFORMAT (\\d+)";
+
+		if(cmd_re.FullMatch(parameters)) {
+			cmd_re.FullMatch(parameters, &format);
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: setting autorestart save format to %d.", format);
+
+			board.set_autoformat(format);
+			this->send_command("ACK");
+			return 0;
+		}
+
 		this->send_command(this->format_command("ERR %d", ATMD_NETERR_BAD_PARAM));
 		return 0;
+
 
 	// Configuration GET commands
 	} else if(main_command == "GET") {
@@ -541,7 +613,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 		if(parameters == "TT") {
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured total measure time.");
-			
+
 			string answer = "VAL TT ";
 			answer += board.get_tottime();
 			this->send_command(answer);
@@ -570,8 +642,68 @@ int Network::exec_command(string command, ATMDboard& board) {
 			return 0;
 		}
 
+		// Get host for FTP transfers
+		if(parameters == "HOST") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+
+			ftp_data = board.get_host();
+			this->send_command(this->format_command("VAL HOST %s", (ftp_data == "") ? "NONE" : ftp_data.c_str()));
+			return 0;
+		}
+
+		// Get user for FTP transfers
+		if(parameters == "USER") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+
+			ftp_data = board.get_user();
+			this->send_command(this->format_command("VAL USER %s", (ftp_data == "") ? "NONE" : ftp_data.c_str()));
+			return 0;
+		}
+
+		// Get password for FTP transfers (we do not send actual password, but just inform if it is set or not)
+		if(parameters == "PSW") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+
+			this->send_command(this->format_command("VAL PSW %s", (board.psw_set()) ? "OK" : "NONE"));
+			return 0;
+		}
+
+		// Get filename prefix for measure autorestart (with relative path...)
+		if(parameters == "PREFIX") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+
+			filename = board.get_prefix();
+			this->send_command(this->format_command("VAL PREFIX %s", (filename == "") ? "NONE" : filename.c_str()));
+			return 0;
+		}
+
+		// Get total autorestart measurement time
+		if(parameters == "AUTORANGE") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured total autorestart measurement time.");
+
+			string answer = "VAL AUTORANGE ";
+			answer += board.get_autorange();
+			this->send_command(answer);
+			return 0;
+		}
+
+		// Get autorestart save format
+		if(parameters == "AUTOFORMAT") {
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured autorestart save format.");
+
+			this->send_command(this->format_command("VAL AUTOFORMAT %d", board.get_autoformat()));
+			return 0;
+		}
+
 		this->send_command(this->format_command("ERR %d", ATMD_NETERR_BAD_PARAM));
 		return 0;
+
 
 	// Measurement MSR commands
 	} else if(main_command == "MSR") {
@@ -581,43 +713,49 @@ int Network::exec_command(string command, ATMDboard& board) {
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested to start a measure.");
 
-			int retval;
-			switch(board.get_status()) {
-				case ATMD_STATUS_FINISHED:
-					if(board.collect_measure(retval)) {
-						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
+			if(board.get_autostart() == ATMD_AUTOSTART_DISABLED) {
+				int retval;
+				switch(board.get_status()) {
+					case ATMD_STATUS_FINISHED:
+						if(board.collect_measure(retval)) {
+							this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
+							break;
+						}
+	
+					case ATMD_STATUS_IDLE:
+						if(board.start_measure()) {
+							// Error starting measurement
+							this->send_command(this->format_command("ERR %d", ATMD_NETERR_START));
+	
+						} else {
+							// Measure started correctly
+							this->send_command("ACK");
+						}
 						break;
-					}
-
-				case ATMD_STATUS_IDLE:
-					if(board.start_measure()) {
-						// Error starting measurement
-						this->send_command(this->format_command("ERR %d", ATMD_NETERR_START));
-
-					} else {
-						// Measure started correctly
-						this->send_command("ACK");
-					}
-					break;
-
-				case ATMD_STATUS_ERROR:
-					// TODO: What we do in this situation? 
-					// We can start the measure but we loose information about the last measurement error!
-					// Maybe we can send the thread error as an answer and then reset the status.
-					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_ERR));
-					break;
-
-				case ATMD_STATUS_RUNNING:
-				case ATMD_STATUS_STARTING:
-					// A measure is already running. ATMD_STATUS_RUNNING should be never seen but who knows...
-					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_RUN));
-					break;
-
-				default:
-					// We got an unkown status? This should not happen so we log a warning.
-					syslog(ATMD_WARN, "Network [exec_command]: found the board in an unknown status (or not impemented here!).");
-					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_UNKN));
-					break;
+	
+					case ATMD_STATUS_ERROR:
+						// TODO: What we do in this situation?
+						// We can start the measure but we loose information about the last measurement error!
+						// Maybe we can send the thread error as an answer and then reset the status.
+						this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_ERR));
+						break;
+	
+					case ATMD_STATUS_RUNNING:
+					case ATMD_STATUS_STARTING:
+						// A measure is already running. ATMD_STATUS_RUNNING should be never seen but who knows...
+						this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_RUN));
+						break;
+	
+					default:
+						// We got an unkown status? This should not happen so we log a warning.
+						syslog(ATMD_WARN, "Network [exec_command]: found the board in an unknown status (or not impemented here!).");
+						this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_UNKN));
+						break;
+				}
+			} else {
+				// Autostart mode is enabled! Cannot start an independant measurement!
+				syslog(ATMD_WARN, "Network [exec_command]: client tried to start a measure with autostart mode enabled.");
+				this->send_command(this->format_command("ERR %d", ATMD_NETERR_AUTOSTART));
 			}
 
 			return 0;
@@ -632,11 +770,19 @@ int Network::exec_command(string command, ATMDboard& board) {
 			switch(board.get_status()) {
 				// There is no measure to stop
 				case ATMD_STATUS_FINISHED:
+					// If autostart is enabled and the measurement is already finished we set to stop to save the last measurement
+					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
+						board.set_autostart(ATMD_AUTOSTART_STOP);
+
 					if(board.collect_measure(retval)) {
 						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
 						break;
 					}
 				case ATMD_STATUS_IDLE:
+					// If autostart is enabled and we are in idle state (higly unprobable) we disable autorestart directly
+					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
+						board.set_autostart(ATMD_AUTOSTART_DISABLED);
+
 					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_IDLE));
 					break;
 
@@ -648,6 +794,10 @@ int Network::exec_command(string command, ATMDboard& board) {
 
 				case ATMD_STATUS_RUNNING:
 				case ATMD_STATUS_STARTING:
+					// If autostart is enabled and the measurement is already finished we set to stop to save the last measurement
+					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
+						board.set_autostart(ATMD_AUTOSTART_STOP);
+
 					// Stopping measurement
 					syslog(ATMD_INFO, "Network [exec_command]: stopping measurement...");
 					if(board.stop_measure()) {
@@ -675,22 +825,32 @@ int Network::exec_command(string command, ATMDboard& board) {
 			switch(board.get_status()) {
 				// There is no measure to abort
 				case ATMD_STATUS_FINISHED:
+					// If autostart is enabled and the measurement is already finished we set to stop to save the last measurement
+					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
+						board.set_autostart(ATMD_AUTOSTART_STOP);
 					if(board.collect_measure(retval)) {
 						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
 						break;
 					}
 				case ATMD_STATUS_IDLE:
+					// If autostart is enabled and we are in idle state (higly unprobable) we disable autorestart directly
+					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
+						board.set_autostart(ATMD_AUTOSTART_DISABLED);
 					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_IDLE));
 					break;
 
 				// There was an error in the previous measure
 				case ATMD_STATUS_ERROR:
-					// TODO: What we do in this situation? 
+					// TODO: What we do in this situation?
 					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_ERR));
 					break;
 
 				case ATMD_STATUS_RUNNING:
 				case ATMD_STATUS_STARTING:
+					// If autostart is enabled, we disable it directly. No need to save the measurement because we are aborting
+					if(board.get_autostart() == ATMD_AUTOSTART_ENABLED)
+						board.set_autostart(ATMD_AUTOSTART_DISABLED);
+
 					// Aborting measurement
 					syslog(ATMD_INFO, "Network [exec_command]: aborting measurement...");
 					if(board.abort_measure()) {
@@ -749,7 +909,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 		}
 
 		// List measures command
-		if(parameters == "LST") {
+		if(parameters == "LST" || parameters == "LIST") {
 			if(enable_debug)
 				syslog(ATMD_DEBUG, "Network [exec_command]: client requested the list of unsaved measures. List contained %u measures.", board.num_measures());
 			if(board.num_measures() > 0) {
@@ -770,7 +930,7 @@ int Network::exec_command(string command, ATMDboard& board) {
 		}
 
 		// Save measure command
-		cmd_re = "SAV (\\d+) (\\d+) (\\/[a-zA-Z0-9\\.\\_\\-\\/]+)";
+		cmd_re = "SAV[E]? (\\d+) (\\d+) ([a-zA-Z0-9\\.\\_\\-\\/]+)";
 		if(cmd_re.FullMatch(parameters)) {
 			cmd_re.FullMatch(parameters, &measure_num, &format, &filename);
 			if(enable_debug)
@@ -851,7 +1011,6 @@ int Network::exec_command(string command, ATMDboard& board) {
 			return 0;
 		}
 
-
 		// Delete measure command
 		cmd_re = "DEL (\\d+)";
 		if(cmd_re.FullMatch(parameters)) {
@@ -876,8 +1035,78 @@ int Network::exec_command(string command, ATMDboard& board) {
 			return 0;
 		}
 
+		// Autostart command - Multiple automatic measurements with no limits
+		if(parameters == "AUTOSTART") {
+
+			if(enable_debug)
+				syslog(ATMD_DEBUG, "Network [exec_command]: client requested to switch to autostart mode.");
+
+			if(board.get_prefix() == "") {
+				syslog(ATMD_ERR, "Network [exec_command]: requested autostart, but no file prefix defined. Aborting.");
+				this->send_command(this->format_command("ERR %d", ATMD_NETERR_NOPREFIX));
+				return 0;
+			}
+
+			int retval;
+			switch(board.get_status()) {
+				case ATMD_STATUS_FINISHED:
+					if(board.collect_measure(retval)) {
+						this->send_command(this->format_command("ERR %d", ATMD_NETERR_THJOIN));
+						break;
+					}
+
+				case ATMD_STATUS_IDLE:
+					if(board.reset_autostart_counters()) {
+						this->send_command(this->format_command("ERR %d", ATMD_NETERR_START));
+
+					} else {
+						if(board.start_measure()) {
+							// Error starting measurement
+							this->send_command(this->format_command("ERR %d", ATMD_NETERR_START));
+
+						} else {
+							// Set board autostart flag
+							board.set_autostart(ATMD_AUTOSTART_ENABLED);
+
+							// Measure started correctly
+							this->send_command("ACK");
+						}
+					}
+					break;
+
+				case ATMD_STATUS_ERROR:
+					// TODO: What we do in this situation?
+					// We can start the measure but we loose information about the last measurement error!
+					// Maybe we can send the thread error as an answer and then reset the status.
+					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_ERR));
+					break;
+
+				case ATMD_STATUS_RUNNING:
+				case ATMD_STATUS_STARTING:
+					// A measure is already running. ATMD_STATUS_RUNNING should be never seen but who knows...
+					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_RUN));
+					break;
+
+				default:
+					// We got an unkown status? This should not happen so we log a warning.
+					syslog(ATMD_WARN, "Network [exec_command]: found the board in an unknown status (or not impemented here!).");
+					this->send_command(this->format_command("ERR %d", ATMD_NETERR_STATUS_UNKN));
+					break;
+			}
+
+			return 0;
+		}
+
+		// Autostop command - To stop the automatic measurement mode
+		if(parameters == "AUTOSTOP") {
+			board.set_autostart(ATMD_AUTOSTART_STOP);
+			this->send_command("ACK");
+			return 0;
+		}
+
 		this->send_command(this->format_command("ERR %d", ATMD_NETERR_BAD_PARAM));
 		return 0;
+
 
 	} else if(main_command == "EXT") {
 		// Terminate client session

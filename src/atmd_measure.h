@@ -2,17 +2,17 @@
 /*
  * atmd_measure.h
  * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
- * 
+ *
  * main.cc is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * main.cc is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -22,114 +22,123 @@
 
 #include "common.h"
 
-
-class StopData {
-	public:
-	StopData(): stop_time(0), start_count(0), channel(0), slope(0) {};
-	~StopData() {};
-
-	// Interfaces for managing stop time
-	void set_bins(int32_t time) { this->stop_time = time; };
-	int32_t get_bins() { return this->stop_time; };
-
-	// Interfaces for managing start count
-	void set_startcount(uint32_t count) { this->start_count = count; };
-	uint32_t get_startcount() { return this->start_count; };
-	
-	// Interfaces for managing the channel
-	void set_channel(uint8_t channel) { this->channel = channel; };
-	uint8_t get_channel() { return this->channel; };
-	
-	// Interfaces for managing slope
-	void set_slope(bool slope) { this->slope = slope; };
-	bool get_slope() { return this->slope; };
-
-	private:
-	// Hit time in units of tbin (depends on resolution)
-	int32_t stop_time;
-
-	// Start count in units of ATMD_TREF
-	uint32_t start_count;
-
-	// Stop channel
-	uint8_t channel;
-
-	// Slope
-	bool slope;
-};
-
 class StartData {
 	public:
-	StartData(uint16_t def_size = 256): start01(0), elapsed_time(0), timefrombegin(0) { this->alloc_size = def_size; this->stops.reserve(this->alloc_size); };
-	~StartData() { this->stops.clear(); }; // The destructor should clear the stops vector to release the memory allocated
+		StartData(): start01(0), elapsed_time(0), timefrombegin(0), time_bin(0.0), block_size(1) {
+			this->stoptime.clear();
+			this->channel.clear();
+		};
+		~StartData() {};
 
-	int add_stop(StopData& stop);
-	uint32_t count_stops() { return this->stops.size(); };
-	StopData get_stop(uint32_t num_stop) { return this->stops[num_stop]; } // TODO: this should include some error checking!
-	void clear() { this->stops.clear(); this->start01 = 0; this->elapsed_time = 0; this->timefrombegin = 0; };
+		int add_event(uint32_t retrig, uint32_t stop, int8_t ch);
+		int get_event(uint32_t num, uint32_t& retrig, uint32_t& stop, int8_t& ch);
+		int get_channel(uint32_t num, int8_t& ch);
+		int get_stoptime(uint32_t num, double& stop);
+		int get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop);
+		uint32_t count_stops() { return this->retrig_count.size(); };
 
-	// Interface to set start01
-	void set_start01(uint32_t value) { this->start01 = value; };
-	uint32_t get_start01() { return this->start01; };
+		void clear() {
+			this->retrig_count.clear();
+			this->stoptime.clear();
+			this->channel.clear();
+			this->start01 = 0;
+			this->elapsed_time = 0;
+			this->timefrombegin = 0;
+			this->time_bin = 0.0;
+			this->block_size = 1;
+		};
 
-	// Interface for managing effective window time
-	void set_time(struct timeval& begin, struct timeval& end);
-	uint64_t get_time() { return this->elapsed_time; };
+		// Interface to set start01
+		void set_start01(uint32_t value) { this->start01 = value; };
+		uint32_t get_start01() { return this->start01; };
 
-	// Interface for managing time from the begin of measure
-	void set_timefrombegin(struct timeval& begin, struct timeval& end);
-	uint64_t get_timefrombegin() { return this->timefrombegin; };
+		// Interface for managing effective window time
+		void set_time(struct timeval& begin, struct timeval& end);
+		uint64_t get_time() { return this->elapsed_time; };
+
+		// Interface for managing time from the begin of measure
+		void set_timefrombegin(struct timeval& begin, struct timeval& end);
+		uint64_t get_timefrombegin() { return this->timefrombegin; };
+
+		// Interface to manage time_bin
+		void set_tbin(double tbin) { this->time_bin = tbin; };
+		double get_tbin() { return this->time_bin; };
 
 	private:
-	// Total window time in microseconds
-	uint64_t elapsed_time;
+		uint64_t elapsed_time;         /* Effective window time in microseconds */
+		uint64_t timefrombegin;        /* Total time from the begin of the measure in microseconds */
 
-	// Time from the begin of the measure in microseconds
-	uint64_t timefrombegin;
+		uint8_t block_size;            /* Allocation block size. Maximum size detemined by ATMD_ALLOCSIZE */
 
-	// Default allocation size for start
-	uint16_t alloc_size;
+		uint32_t start01;              /* Start01 in unit of Tbin for current start */
 
-	// Value of start01 in tbin
-	uint32_t start01;
+		vector<uint32_t> retrig_count; /* Vector of ATMD retrig counters */
+		vector<uint32_t> stoptime;     /* Vector of stoptimes in unit of Tbin */
+		vector<int8_t> channel;        /* Vector of channel numbers */
 
-	vector<StopData> stops;
+		double time_bin;               /* Time bin in ps */
+
 };
 
 class Measure {
 	public:
-	Measure(): incomplete(false), time_bin(0.0) {this->elapsed_time = 0; };
-	~Measure() { this->starts.clear(); }; // The destructor should clear the starts vector to release the memory allocated
+		Measure(): incomplete(false), elapsed_time(0) {
+			memset(&(this->measure_begin), 0x00, sizeof(struct timeval));
+			memset(&(this->measure_end), 0x00, sizeof(struct timeval));
+		};
+		~Measure() {
+			for(uint32_t i = 0; i < this->starts.size(); i++)
+				delete starts[i];
+			this->starts.clear();
+		}; // The destructor should cycle over starts vector to free all the start objects
 
-	// Interfaces for managing start objects
-	int add_start(StartData& start);
-	void clear() { this->starts.clear(); this->incomplete = false; this->time_bin = 0; this->elapsed_time = 0; };
-	uint32_t count_starts() { return this->starts.size(); };
-	StartData get_start(uint32_t num_start) { return this->starts[num_start]; } // TODO: this should include some error checking!
+		// Interface to add a start object
+		int add_start(StartData* start);
 
-	// Interface for managing effective measure time
-	void set_time(struct timeval& begin, struct timeval& end);
-	uint64_t get_time() { return this->elapsed_time; };
+		// Interface to clear all stored start objects
+		void clear() {
+			for(uint32_t i = 0; i < this->starts.size(); i++)
+				delete (starts[i]);
+			this->starts.clear();
+			this->incomplete = false;
+			this->elapsed_time = 0;
+			memset(&(this->measure_begin), 0x00, sizeof(struct timeval));
+			memset(&(this->measure_end), 0x00, sizeof(struct timeval));
+		};
 
-	void set_incomplete(bool value) { this->incomplete = value; };
-	bool is_incomplete() { return this->incomplete; };
+		// Interface to count start events
+		uint32_t count_starts() { return this->starts.size(); };
 
-	// Interface for time_bin
-	void set_tbin(double tbin) { this->time_bin = tbin; };
-	double get_tbin() { return this->time_bin; };
+		// Interface to retrieve a start object
+		StartData* get_start(uint32_t num_start) {
+			if(num_start < this->starts.size())
+				return this->starts[num_start];
+			else
+				return NULL;
+		};
+
+		// Interface for managing effective measure time
+		void set_time(struct timeval& begin, struct timeval& end);
+		uint64_t get_time() { return this->elapsed_time; };
+		void get_begin(struct timeval& timestamp) {
+			timestamp.tv_sec = this->measure_begin.tv_sec;
+			timestamp.tv_usec = this->measure_begin.tv_usec;
+		};
+		void get_end(struct timeval& timestamp) {
+			timestamp.tv_sec = this->measure_end.tv_sec;
+			timestamp.tv_usec = this->measure_end.tv_usec;
+		};
+
+		// Interface to manage incomplete flag
+		void set_incomplete(bool value) { this->incomplete = value; };
+		bool is_incomplete() { return this->incomplete; };
 
 	private:
-	// Total measure time
-	uint64_t elapsed_time;
-
-	// Incomplete flags
-	bool incomplete;
-
-	// Time bin e start count
-	double time_bin;
-
-	// Vector of start objects relative to this measure
-	vector<StartData> starts;
+		uint64_t elapsed_time;        /* Total measure time */
+		struct timeval measure_begin; /* Timestamp of measure start */
+		struct timeval measure_end;   /* Timestamp of measure end */
+		bool incomplete;              /* Incomplete flags */
+		vector<StartData*> starts;    /* Vector of pointers to start objects relative to this measure */
 };
 
 #endif

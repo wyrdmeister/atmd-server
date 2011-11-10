@@ -2,17 +2,17 @@
 /*
  * main.cpp
  * Copyright (C) Michele Devetta 2009 <michele.devetta@unimi.it>
- * 
+ *
  * main.cc is free software: you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
  * Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * main.cc is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License along
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -137,7 +137,7 @@ int main(int argc, char * const argv[])
 	bool simulate = false;
 	uint16_t listen_port = ATMD_DEF_PORT;
 	string ip_address = ATMD_DEF_LISTEN;
-	
+
 	// Pid file
 	string pid_filename = ATMD_PID_FILE;
 	ofstream pid_file;
@@ -193,6 +193,13 @@ int main(int argc, char * const argv[])
 		}
 	}
 
+	// Initialize libcurl
+	if(curl_global_init(CURL_GLOBAL_ALL)) {
+		syslog(ATMD_INFO, "Failed to initialize libcurl. Exiting.");
+		exit(-1);
+	}
+
+
 	// Opening pid file
 	pid_file.open(pid_filename.c_str());
 	if(!pid_file.is_open()) {
@@ -210,7 +217,7 @@ int main(int argc, char * const argv[])
 		}
 	}
 
-	// Initializing board object
+	// Initializing board object (and curl interface)
 	ATMDboard board;
 	if(board.init(simulate)) {
 		// ATMD board not found. Terminating.
@@ -264,8 +271,12 @@ int main(int argc, char * const argv[])
 		netif.init();
 
 	} catch (int e) {
-		
+		// TODO
 	}
+
+	// Define the time for which the main cycle sleep between subsequent calls to get_command
+	sleeptime.tv_sec = 0;
+	sleeptime.tv_nsec = 25000; // 25ms sleep
 
 	// Cycle accepting client connections
 	while(netif.accept_client() == 0) {
@@ -280,16 +291,48 @@ int main(int argc, char * const argv[])
 					throw(ATMD_ERR_TERM);
 				}
 
-				// Receive a command
-				netif.get_command(command);
+				if(netif.get_command(command) == 0) {
+					// We have received a command
 
-				if(enable_debug)
-					// We log commands for debugging purposes
-					syslog(ATMD_DEBUG, "Received command \"%s\"", command.c_str());
+					if(enable_debug)
+						// We log commands for debugging purposes
+						syslog(ATMD_DEBUG, "Received command \"%s\"", command.c_str());
 
-				// Execution of the command
-				netif.exec_command(command, board);
+					// Execution of the command
+					netif.exec_command(command, board);
+				}
 
+				if(board.get_autostart() != ATMD_AUTOSTART_DISABLED) {
+					// If autostart is enable we shoud do some more things...
+					int retval = 0;
+					switch(board.get_status()) {
+						case ATMD_STATUS_IDLE:
+						case ATMD_STATUS_FINISHED:
+							board.measure_autorestart(ATMD_ERR_NONE);
+							break;
+
+						case ATMD_STATUS_ERROR:
+							board.collect_measure(retval);
+							if(retval == ATMD_ERR_EMPTY) {
+								// In case of empty measurement we can continue (of course we cannot the previous measurement)
+								if(board.measure_autorestart(retval)) {
+									// Autorestart failed... nothing to do because everything should have been done inside measure_autorestart.
+								}
+
+							} else {
+								// What we do in case of other error??? Maybe we should stop the autorestart process!
+
+							}
+							break;
+
+						case ATMD_STATUS_RUNNING:
+						case ATMD_STATUS_STARTING:
+						default:
+							break;
+					}
+				}
+
+				nanosleep(&sleeptime, NULL);
 			} while(true);
 
 			// Useless...
@@ -311,6 +354,8 @@ int main(int argc, char * const argv[])
 			break;
 		}
 	}
+
+	curl_global_cleanup();
 
 	syslog(ATMD_INFO, "Terminating atmd-server version %s.", VERSION);
 	closelog();

@@ -11,16 +11,18 @@ AC_PROG_CXX
 AM_PROG_CC_STDC
 AC_HEADER_STDC
 
+LIBCURL_CHECK_CONFIG([yes], [7])
+
 PKG_CHECK_MODULES([PCI], [libpci >= 3.0], , [AC_CHECK_LIB(pci, pci_scan_bus)])
 
 PKG_CHECK_MODULES([PCRECPP], [libpcrecpp >= 7])
 
-
 AC_CHECK_LIB(pthread, pthread_create, [PTHREAD_LIBS=-lpthread], [AC_MSG_ERROR([Cannot find libpthread.])])
 AC_SUBST([PTHREAD_LIBS])
+
+LIBS="$LIBS $CURLLIBS"
 
 AC_OUTPUT([
 Makefile
 src/Makefile
 ])
-

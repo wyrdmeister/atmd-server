@@ -21,13 +21,12 @@ atmd_server_SOURCES = \
 	atmd_timings.cpp      \
 	atmd_timings.h      \
 	atmd_measure_direct.cpp      \
-	atmd_measure_burst.cpp	\
 	atmd_measure.cpp      \
 	atmd_measure.h      \
 	atmd_network.cpp      \
 	atmd_network.h
 
-atmd_server_LDFLAGS = $(PCI_LIBS) $(PCRECPP_LIBS) $(PTHREAD_LIBS)
+atmd_server_LDFLAGS = $(PCI_LIBS) $(PCRECPP_LIBS) $(PTHREAD_LIBS) $(LIBCURL)
 
 atmd_server_LDADD = 
 
