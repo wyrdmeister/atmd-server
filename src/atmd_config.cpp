@@ -56,18 +56,18 @@ int AtmdConfig::read(const std::string& filename) {
 
     // Discard comments
     conf_re = "^#.*";
-    if(conf_re.FullMatch(line))
+    if(conf_re.PartialMatch(line))
       continue;
 
     // Discard empty lines
-    conf_re = "^\\s*$";
-    if(conf_re.FullMatch(line))
+    conf_re = "^\\s+$";
+    if(conf_re.PartialMatch(line))
       continue;
 
     // Check for section
     conf_re = "^\\[(\\S+)\\]";
-    if(conf_re.FullMatch(line, &txt)) {
-#ifdef ATDM_SERVER
+    if(conf_re.PartialMatch(line, &txt)) {
+#ifdef ATMD_SERVER
       if(txt == "server") {
 #else
       if(txt == "agent") {
@@ -79,10 +79,10 @@ int AtmdConfig::read(const std::string& filename) {
         good_sec = false;
 #ifdef DEBUG
         if(enable_debug)
-          syslog(ATMD_DEBUG, "Config [read]: found unexpected section '%s'.", txt.c_str());
+          syslog(ATMD_DEBUG, "Config [read]: ignoring section '%s'.", txt.c_str());
 #endif
-        continue;
       }
+      continue;
     }
 
     if(good_sec) {
@@ -91,7 +91,7 @@ int AtmdConfig::read(const std::string& filename) {
 #ifdef ATMD_SERVER
       // Agent command
       conf_re = "^agent ([a-fA-f0-9]{2}:[a-fA-f0-9]{2}:[a-fA-f0-9]{2}:[a-fA-f0-9]{2}:[a-fA-f0-9]{2}:[a-fA-f0-9]{2})";
-      if(conf_re.FullMatch(line, &txt)) {
+      if(conf_re.PartialMatch(line, &txt)) {
 #ifdef DEBUG
         if(enable_debug)
           syslog(ATMD_DEBUG, "Config [read]: found agent with address '%s'.", txt.c_str());
@@ -108,7 +108,7 @@ int AtmdConfig::read(const std::string& filename) {
 
       // Number of RTSKBS
       conf_re = "^rtskbs (\\d+)";
-      if(conf_re.FullMatch(line, &_rtskbs)) {
+      if(conf_re.PartialMatch(line, &_rtskbs)) {
 #ifdef DEBUG
         if(enable_debug)
           syslog(ATMD_DEBUG, "Config [read]: configured number of RTSKBS as %u.", _rtskbs);
@@ -118,7 +118,7 @@ int AtmdConfig::read(const std::string& filename) {
 
       // RT ethernet IF
       conf_re = "^rtif ([a-z0-9]*)";
-      if(conf_re.FullMatch(line, &txt)) {
+      if(conf_re.PartialMatch(line, &txt)) {
 #ifdef DEBUG
         if(enable_debug)
           syslog(ATMD_DEBUG, "Config [read]: configured RT interface as '%s'.", txt.c_str());
@@ -127,6 +127,8 @@ int AtmdConfig::read(const std::string& filename) {
         _rtif[IFNAMSIZ-1] = '\0';
         continue;
       }
+    } else {
+      continue;
     }
 
     syslog(ATMD_WARN, "Config [read]: found an unknown configuration command (The command was '%s')", line);
