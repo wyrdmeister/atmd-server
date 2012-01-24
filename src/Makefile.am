@@ -1,35 +1,30 @@
 ## Process this file with automake to produce Makefile.in
 
-AM_CPPFLAGS = \
-	-DPACKAGE_LOCALE_DIR=\""$(prefix)/$(DATADIRNAME)/locale"\" \
-	-DPACKAGE_SRC_DIR=\""$(srcdir)"\" \
-	-DPACKAGE_DATA_DIR=\""$(datadir)"\" 
-
 AM_CFLAGS = -Wall -g
 
-bin_PROGRAMS = atmd_server atmd_bntest
+bin_PROGRAMS = atmd_server atmd_agent
 
 atmd_server_SOURCES = \
-	common.h      \
-	atmd_hardware.cpp      \
-	atmd_hardware.h      \
-	main.cpp      \
-	atmd_timings.cpp      \
-	atmd_timings.h      \
-	atmd_measure_direct.cpp      \
-	atmd_measure_direct.h      \
-	atmd_measure.cpp      \
-	atmd_measure.h      \
-	atmd_network.cpp      \
-	atmd_network.h      \
+	atmd_server.cpp \
+	atmd_netagent.cpp \
+	atmd_virtualboard.cpp \
+	atmd_config.cpp \
+	atmd_rtnet.cpp \
+	atmd_timings.cpp \
+	atmd_network.cpp \
+	atmd_measure.cpp \
 	MatFile.cpp
 
-atmd_bntest_SOURCES = atmd_bntest.cpp
+atmd_agent_SOURCES = \
+	atmd_agent.cpp \
+	atmd_agentmeasure.cpp \
+	atmd_hardware.cpp \
+	atmd_netagent.cpp \
+	atmd_config.cpp \
+	atmd_rtnet.cpp
 
-atmd_server_LDFLAGS = $(LDFLAGS) $(PCI_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(XENO_LIBS)
-atmd_server_CFLAGS = $(CFLAGS) $(XENO_CFLAGS)
-atmd_server_CPPFLAGS = $(CPPFLAGS) $(XENO_CFLAGS) $(LIBCURL_CPPFLAGS)
+atmd_server_LDADD = $(LDFLAGS) $(PCI_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(XENO_LIBS)
+atmd_server_CPPFLAGS = $(CPPFLAGS) $(XENO_CFLAGS) $(RTNET_CFLAGS) $(LIBCURL_CPPFLAGS) -DATMD_SERVER
 
-atmd_bntest_LDFLAGS = $(LDFLAGS)
-atmd_bntest_CFLAGS = $(CFLAGS)
-atmd_bntest_CPPFLAGS = $(CPPFLAGS)
+atmd_agent_LDADD = $(LDFLAGS) $(PCI_LIBS) $(PCRECPP_LIBS) $(XENO_LIBS)
+atmd_agent_CPPFLAGS = $(CPPFLAGS) $(XENO_CFLAGS) $(RTNET_CFLAGS) -DATMD_AGENT
