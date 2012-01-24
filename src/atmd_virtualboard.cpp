@@ -1716,3 +1716,113 @@ int VirtualBoard::stop_measure() {
   _status = ATMD_STATUS_ERR;
   return -1;
 }
+
+
+/* @fn VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<uint32_t> >& stop_counts)
+ * Return a vector of vectors of integers with the counts of stops on each channel.
+ *
+ * @param measure_number The number of the measure that we want to save.
+ * @param stop_counts Reference to the vector of vectors to output the data.
+ * @return Return 0 on success, -1 on error.
+ */
+int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<uint32_t> >& stop_counts)const {
+
+  // Check if the measure number is valid.
+  if(measure_number < 0 || measure_number >= this->measures()) {
+    syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to get statistics about a non existent measure.");
+    return -1;
+  }
+
+  std::vector<uint32_t> stops_ch(1+8*agents(),0);
+  StartData* current_start;
+
+  // We cycle over all starts
+  for(size_t i = 0; i < this->_measures[measure_number]->count_starts(); i++) {
+    if(!(current_start = this->_measures[measure_number]->get_start(i))) {
+      syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to stat a non existent start.");
+      return -1;
+    }
+
+    // We save the measure time
+    if(current_start->times())
+      stops_ch[0] = (uint32_t)(current_start->get_window_time(0) / 1000);
+
+    // We cycle over all stops of current start
+    for(size_t j = 0; j < current_start->count_stops(); j++) {
+      int8_t ch;
+      current_start->get_channel(j, ch);
+      stops_ch[(ch > 0) ? ch : -ch]++;
+    }
+
+    // We add the vector with counts to the output
+    stop_counts.push_back(stops_ch);
+
+    // We reset the counts
+    for(size_t j = 0; j < 9; j++)
+      stops_ch[j] = 0;
+  }
+
+  return 0;
+}
+
+
+/* @fn VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<uint32_t> >& stop_counts, std::string win_start, std::string win_ampl)
+ * Return a vector of vectors of integers with the counts of stops on each channel.
+ *
+ * @param measure_number The number of the measure that we want to save.
+ * @param stop_counts Reference to the vector of vectors to output the data.
+ * @return Return 0 on success, -1 on error.
+ */
+int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<uint32_t> >& stop_counts, std::string win_start, std::string win_ampl)const {
+
+    // Check if the measure number is valid.
+    if(measure_number < 0 || measure_number >= this->measures()) {
+        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to get statistics about a non existent measure.");
+        return -1;
+    }
+
+    Timings window_start, window_amplitude;
+    if(window_start.set(win_start)) {
+        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: the time string passed is not valid (\"%s\").", win_start.c_str());
+        return -1;
+    }
+    if(window_amplitude.set(win_ampl)) {
+        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: the time string passed is not valid (\"%s\").", win_ampl.c_str());
+        return -1;
+    }
+
+    std::vector<uint32_t> stops_ch(1+8*agents(),0);
+    StartData* current_start;
+
+    // We cycle over all starts
+    for(size_t i = 0; i < this->_measures[measure_number]->count_starts(); i++) {
+      if(!(current_start = this->_measures[measure_number]->get_start(i))) {
+        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to stat a non existent start.");
+        return -1;
+      }
+
+      // We save the measure time
+      if(current_start->times())
+        stops_ch[0] = (uint32_t)(current_start->get_window_time(0) / 1000);
+
+      // We cycle over all stops of current start
+      for(size_t j = 0; j < current_start->count_stops(); j++) {
+        int8_t ch;
+        double stoptime;
+        current_start->get_channel(j, ch);
+        current_start->get_stoptime(j, stoptime);
+
+        if(stoptime > window_start.get_ps() && stoptime < window_start.get_ps()+window_amplitude.get_ps())
+          stops_ch[(ch > 0) ? ch : -ch]++;
+      }
+
+      // We add the vector with counts to the output
+      stop_counts.push_back(stops_ch);
+
+      // We reset the counts
+      for(size_t j = 0; j < 9; j++)
+        stops_ch[j] = 0;
+    }
+
+    return 0;
+}

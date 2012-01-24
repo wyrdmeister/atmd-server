@@ -34,6 +34,11 @@ extern bool enable_debug;
 #define ATMD_NETERR_BAD_PARAM       3
 #define ATMD_NETERR_SAV             4
 #define ATMD_NETERR_DEL             5
+#define ATMD_NETERR_MEAS_RUN        6
+#define ATMD_NETERR_LOCK            7
+#define ATMD_NETERR_STAT            8
+#define ATMD_NETERR_START           9
+#define ATMD_NETERR_STOP           10
 
 static const char *network_strerror[] = {
   "NONE",
@@ -41,7 +46,12 @@ static const char *network_strerror[] = {
   "BAD_TIMESTRING",
   "BAD_PARAMETER",
   "SAVE",
-  "DELETE"
+  "DELETE",
+  "MEAS_RUNNING",
+  "LOCK",
+  "STAT",
+  "START",
+  "STOP"
 };
 
 #include "atmd_network.h"
@@ -520,6 +530,13 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         syslog(ATMD_DEBUG, "Network [exec_command]: setting resolution (ref: %d, hs: %d).", val1, val2);
 #endif
 
+      // Check that no measures are running. Changing resolution during a measure will give bad data
+      if(board.status() == ATMD_STATUS_RUNNING) {
+        syslog(ATMD_ERR, "Network [exec_command]: the resolution cannot be changed during a measurement.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_MEAS_RUN, network_strerror[ATMD_NETERR_MEAS_RUN]));
+        return 0;
+      }
+
       // We check that the parameters are meaningful. We cannot change the resolution too much!
       if(val1 < 6 || val2 < 60) {
         syslog(ATMD_ERR, "Network [exec_command]: the resolution parameters passed are meaningless (ref: %d, hs: %d).", val1, val2);
@@ -821,6 +838,13 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
           syslog(ATMD_DEBUG, "Network [exec_command]: client requested to start a measure.");
 #endif
 
+      // Start measure
+      if(board.start_measure()) {
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_START, network_strerror[ATMD_NETERR_START]));
+      } else {
+        this->send_command("ACK");
+      }
+
       return 0;
     }
 
@@ -830,6 +854,13 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       if(enable_debug)
         syslog(ATMD_DEBUG, "Network [exec_command]: client requested to stop current measure.");
 #endif
+
+      // Start measure
+      if(board.stop_measure()) {
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_STOP, network_strerror[ATMD_NETERR_STOP]));
+      } else {
+        this->send_command("ACK");
+      }
 
       return 0;
     }
@@ -842,7 +873,28 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 #endif
 
       std::string command = "MSR STATUS ";
-//       switch(board.get_status()) {
+      switch(board.status()) {
+        case ATMD_STATUS_IDLE:
+          command += "IDLE";
+          break;
+
+        case ATMD_STATUS_RUNNING:
+          command += "RUNNING";
+          break;
+
+        case ATMD_STATUS_ERR:
+          command += "ERR";
+          // Reset status once notified error
+          board.status(ATMD_STATUS_IDLE);
+          break;
+
+        default:
+          command += "UNKNOWN";
+          break;
+      }
+
+      // Send answer
+      this->send_command(command);
       return 0;
     }
 
@@ -852,6 +904,13 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       if(enable_debug)
         syslog(ATMD_DEBUG, "Network [exec_command]: client requested the list of unsaved measures. List contained %lu measures.", board.measures());
 #endif
+
+      // Acquire measure lock
+      if(board.acquire_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
 
       if(board.measures() > 0) {
         this->send_command(this->format_command("MSR LST NUM %u", board.measures()));
@@ -866,6 +925,14 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       } else {
         this->send_command("MSR LST NUM 0");
       }
+
+      // Release lock
+      if(board.release_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       return 0;
     }
 
@@ -878,83 +945,130 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         syslog(ATMD_DEBUG, "Network [exec_command]: client requested to save measure %u to file \"%s\"", val1, txt.c_str());
 #endif
 
+      // Acquire measure lock
+      if(board.acquire_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       if(board.save_measure(val1, txt)) {
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_SAV, network_strerror[ATMD_NETERR_SAV]));
       } else {
         this->send_command("ACK");
       }
+
+      // Release lock
+      if(board.release_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       return 0;
     }
 
-/* TODO: STAT command will come later!
+    // Send to client measure statistics
+    std::vector< std::vector<uint32_t> > stopcount;
+    std::string modifier = "", win_start = "", win_ampl = "";
+    cmd_re = "STAT (\\-?)(\\d+) ([0-9\\.\\,]+[umsMh]{1}) ([0-9\\.\\,]+[umsMh]{1})";
+    if(cmd_re.FullMatch(parameters)) {
+      cmd_re.FullMatch(parameters, &modifier, &val1, &win_start, &win_ampl);
+#ifdef DEBUG
+      if(enable_debug)
+        syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u with window (s = %s, a = %s).", val1, win_start.c_str(), win_ampl.c_str());
+#endif
 
-        // Send to client measure statistics
-        std::vector< std::vector<uint32_t> > stopcount;
-        std::string modifier = "";
-        cmd_re = "STAT (\\-?)(\\d+) ([0-9\\.\\,]+[umsMh]{1}) ([0-9\\.\\,]+[umsMh]{1})";
-        if(cmd_re.FullMatch(parameters)) {
-            cmd_re.FullMatch(parameters, &modifier, &measure_num, &win_start, &win_ampl);
-            if(enable_debug)
-                syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u with window (s = %s, a = %s).", measure_num, win_start.c_str(), win_ampl.c_str());
+      // Acquire measure lock
+      if(board.acquire_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
 
-            if(board.stat_stops(measure_num, stopcount, win_start, win_ampl)) {
-                this->send_command("MSR STAT ERR");
-            } else {
-                uint32_t starts, index;
-                if(modifier == "-") {
-                    std::vector<uint32_t> stopsum(8,0);
-                    uint64_t mean_window = 0;
-                    for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
-                        for(index = 0; index < 8; index++)
-                            stopsum[index] += iter->at(index+1);
-                        mean_window += iter->at(0);
-                    }
-                    this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", stopcount.size(), mean_window / stopcount.size(), stopsum.at(0), stopsum.at(1), stopsum.at(2), stopsum.at(3), stopsum.at(4), stopsum.at(5), stopsum.at(6), stopsum.at(7)));
+      // Get stats of stops
+      if(board.stat_stops(val1, stopcount, win_start, win_ampl)) {
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_STAT, network_strerror[ATMD_NETERR_STAT]));
 
-                } else {
-                    board.stat_measure(measure_num, starts);
-                    this->send_command(this->format_command("MSR STAT NUM %u", starts));
+      } else {
+        if(modifier == "-") {
+          // Asked for cumulative stats, sum up all starts!
+          std::vector<uint32_t> stopsum(8,0);
+          uint64_t mean_window = 0;
+          for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
+            for(size_t index = 0; index < 8; index++)
+              stopsum[index] += iter->at(index+1);
+            mean_window += iter->at(0);
+          }
+          this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", stopcount.size(), mean_window / stopcount.size(), stopsum.at(0), stopsum.at(1), stopsum.at(2), stopsum.at(3), stopsum.at(4), stopsum.at(5), stopsum.at(6), stopsum.at(7)));
 
-                    for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
-                        this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", iter - stopcount.begin() + 1, iter->at(0), iter->at(1), iter->at(2), iter->at(3), iter->at(4), iter->at(5), iter->at(6), iter->at(7), iter->at(8)));
-                    }
-                }
-            }
-            return 0;
+        } else {
+          // Asked for separate stats for each start
+          this->send_command(this->format_command("MSR STAT NUM %u", stopcount.size()));
+          for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
+            this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", iter - stopcount.begin() + 1, iter->at(0), iter->at(1), iter->at(2), iter->at(3), iter->at(4), iter->at(5), iter->at(6), iter->at(7), iter->at(8)));
+          }
         }
+      }
 
-        cmd_re = "STAT (\\-?)(\\d+)";
-        if(cmd_re.FullMatch(parameters)) {
-            cmd_re.FullMatch(parameters, &modifier, &measure_num);
-            if(enable_debug)
-                syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u.", measure_num);
+      // Release lock
+      if(board.release_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
 
-            if(board.stat_stops(measure_num, stopcount)) {
-                this->send_command("MSR STAT ERR");
-            } else {
-                uint32_t starts, index;
-                if(modifier == "-") {
-                    std::vector<uint32_t> stopsum(8,0);
-                    uint64_t mean_window = 0;
-                    for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
-                        for(index = 0; index < 8; index++)
-                            stopsum[index] += iter->at(index+1);
-                        mean_window += iter->at(0);
-                    }
-                    this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", stopcount.size(), mean_window / stopcount.size(), stopsum.at(0), stopsum.at(1), stopsum.at(2), stopsum.at(3), stopsum.at(4), stopsum.at(5), stopsum.at(6), stopsum.at(7)));
+      return 0;
+    }
 
-                } else {
-                    board.stat_measure(measure_num, starts);
-                    this->send_command(this->format_command("MSR STAT NUM %u", starts));
+    cmd_re = "STAT (\\-?)(\\d+)";
+    if(cmd_re.FullMatch(parameters)) {
+      cmd_re.FullMatch(parameters, &modifier, &val1);
+#ifdef DEBUG
+      if(enable_debug)
+        syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u.", val1);
+#endif
 
-                    for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
-                        this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", iter - stopcount.begin() + 1, iter->at(0), iter->at(1), iter->at(2), iter->at(3), iter->at(4), iter->at(5), iter->at(6), iter->at(7), iter->at(8)));
-                    }
-                }
-            }
-            return 0;
+      // Acquire measure lock
+      if(board.acquire_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
+      // Get stats of stops
+      if(board.stat_stops(val1, stopcount)) {
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_STAT, network_strerror[ATMD_NETERR_STAT]));
+
+      } else {
+        if(modifier == "-") {
+          std::vector<uint32_t> stopsum(8,0);
+          uint64_t mean_window = 0;
+          for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
+            for(size_t index = 0; index < 8; index++)
+              stopsum[index] += iter->at(index+1);
+            mean_window += iter->at(0);
+          }
+          this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", stopcount.size(), mean_window / stopcount.size(), stopsum.at(0), stopsum.at(1), stopsum.at(2), stopsum.at(3), stopsum.at(4), stopsum.at(5), stopsum.at(6), stopsum.at(7)));
+
+        } else {
+          this->send_command(this->format_command("MSR STAT NUM %u", stopcount.size()));
+
+          for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
+            this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", iter - stopcount.begin() + 1, iter->at(0), iter->at(1), iter->at(2), iter->at(3), iter->at(4), iter->at(5), iter->at(6), iter->at(7), iter->at(8)));
+          }
         }
-        */
+      }
+
+      // Release lock
+      if(board.release_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
+      return 0;
+    }
 
     // Delete measure command
     cmd_re = "DEL (\\d+)";
@@ -965,11 +1079,26 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         syslog(ATMD_DEBUG, "Network [exec_command]: client requested to delete measure %u.", val1);
 #endif
 
+      // Acquire measure lock
+      if(board.acquire_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       if(board.delete_measure(val1)) {
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_DEL, network_strerror[ATMD_NETERR_DEL]));
       } else {
         this->send_command("ACK");
       }
+
+      // Release lock
+      if(board.release_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       return 0;
     }
 
@@ -980,8 +1109,23 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         syslog(ATMD_DEBUG, "Network [exec_command]: client requested to clear all measures.");
 #endif
 
+      // Acquire measure lock
+      if(board.acquire_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       board.clear_measures();
       this->send_command("ACK");
+
+      // Release lock
+      if(board.release_lock()) {
+        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
+        return 0;
+      }
+
       return 0;
     }
 
@@ -993,7 +1137,14 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     // Terminate client session
     // As first thing, we need to check the board status and eventually stop a running measure.
     switch(board.status()) {
-      // TODO: handle board status
+      case ATMD_STATUS_RUNNING:
+        board.stop_measure();
+        break;
+
+      case ATMD_STATUS_IDLE:
+      case ATMD_STATUS_ERR:
+        break;
+
       default:
         break;
     }

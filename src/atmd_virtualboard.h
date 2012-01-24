@@ -204,6 +204,9 @@ public:
   };
 
   // Stat a measure
+  int stat_stops(uint32_t measure_number, std::vector< std::vector<uint32_t> >& stop_counts)const;
+  int stat_stops(uint32_t measure_number, std::vector< std::vector<uint32_t> >& stop_counts, std::string win_start, std::string win_ampl)const;
+
   int stat_measure(size_t id, uint32_t& count)const {
     if(id >= _measures.size())
       return -1;
