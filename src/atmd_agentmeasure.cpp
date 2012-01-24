@@ -177,21 +177,6 @@ void atmd_measure(void *arg) {
       continue;
     }
 
-    // Init measure
-    sys->board->start_rising(meas_info->start_rising());
-    sys->board->start_falling(meas_info->start_falling());
-    for(size_t i = 1; i <= 8; i++) {
-      sys->board->ch_rising(i, meas_info->ch_rising(i));
-      sys->board->ch_falling(i, meas_info->ch_falling(i));
-    }
-    retval = sys->board->config();
-    if(retval) {
-      // PLL not locked. Abort measure
-      rt_queue_free(&queue, (void*)meas_info);
-      sys->board->status(ATMD_STATUS_ERR);
-      continue;
-    }
-
     // Synchronization to TDMA (wait 10 cycles from master sync)
     sys->sock->wait_tdma(meas_info->tdma_cycle() + 10);
 
@@ -208,7 +193,7 @@ void atmd_measure(void *arg) {
       retval = atmd_get_start(sys->board, meas_info->window_time(), meas_info->timeout(), events);
       if(retval) {
         rt_syslog(ATMD_ERR, "Measure [atmd_measure]: failed to get start. Terminating measure.");
-        measure_end = rt_time_read();
+        measure_end = rt_timer_read();
         break;
       }
 
@@ -216,7 +201,7 @@ void atmd_measure(void *arg) {
       retval = atmd_send_start(index, events, sys->sock, sys->addr);
       if(retval) {
         rt_syslog(ATMD_ERR, "Measure [atmd_measure]: failed to send start data. Terminating measure.");
-        measure_end = rt_time_read();
+        measure_end = rt_timer_read();
         break;
       }
 
@@ -224,7 +209,7 @@ void atmd_measure(void *arg) {
       index++;
 
       // Update measure_end
-      measure_end = rt_time_read();
+      measure_end = rt_timer_read();
 
       if(sys->board->stop())
         break;
@@ -235,7 +220,7 @@ void atmd_measure(void *arg) {
 
     // Send termination packet on the data socket
     DataMsg packet;
-    packet.type = ATMD_DT_TERM;
+    packet.type(ATMD_DT_TERM);
     packet.window_start(measure_start);
     packet.window_time(measure_end - measure_start);
     packet.encode();
@@ -558,8 +543,6 @@ int atmd_send_start(uint32_t id, EventData& events, RTnet* sock, const struct et
   // 1) Header packet with all the parameters
   // 2) Data packets. NOTE: last packet is marked
 
-  int retval = 0;
-
   // Packet
   DataMsg packet;
 
@@ -578,7 +561,7 @@ int atmd_send_start(uint32_t id, EventData& events, RTnet* sock, const struct et
 
     // Send packet
     try {
-      sock->send(packet, addr));
+      sock->send(packet, addr);
     } catch(int e) {
       rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message. Error: %d.", e);
       return -1;

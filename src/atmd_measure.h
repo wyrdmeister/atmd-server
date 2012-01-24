@@ -37,41 +37,41 @@
  */
 class StartData {
 public:
-  StartData(): window_time(0), window_begin(0) {};
+  StartData(): time_bin(0.0) {};
   ~StartData() {};
 
   int add_event(uint32_t retrig, int32_t stop, int8_t ch);
-  int get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& ch);
-  //int get_channel(uint32_t num, int8_t& ch);
-  int get_stoptime(uint32_t num, double& stop);
-  int get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop);
-  uint32_t count_stops() { return this->retrig_count.size(); };
+  int get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& ch)const;
+  int get_channel(uint32_t num, int8_t& ch)const;
+  int get_stoptime(uint32_t num, double& stop)const;
+  int get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop)const;
+  uint32_t count_stops()const { return this->retrig_count.size(); };
 
   void clear() {
-      this->retrig_count.clear();
-      this->stoptime.clear();
-      this->channel.clear();
-      this->window_time = 0;
-      this->window_begin = 0;
-      this->time_bin = 0.0;
+    this->retrig_count.clear();
+    this->stoptime.clear();
+    this->channel.clear();
+    this->window_time.clear();
+    this->window_begin.clear();
+    this->time_bin = 0.0;
   };
 
   // Interface for managing effective window time
-  void set_time(uint64_t begin, uint64_t duration) { this->window_begin = begin; this->window_time = duration;};
-  uint64_t get_window_time() { return this->window_time; };
-  uint64_t get_window_begin() { return this->window_begin; };
+  void add_time(uint64_t begin, uint64_t duration) { window_begin.push_back(begin); window_time.push_back(duration); };
+  size_t times()const { return window_begin.size(); };
+  uint64_t get_window_time(size_t i)const { return window_time[i]; };
+  uint64_t get_window_begin(size_t i)const { return window_begin[i]; };
 
   // Interface to manage time_bin
   void set_tbin(double tbin) { this->time_bin = tbin; };
-  double get_tbin() { return this->time_bin; };
+  double get_tbin()const { return this->time_bin; };
 
   // Preallocate
   void reserve(size_t sz);
 
-
 private:
-  uint64_t window_time;                 // Effective window time in nanoseconds
-  uint64_t window_begin;                // Total time from the begin of the measure in nanoseconds
+  std::vector<uint64_t> window_time;    // Effective window time in nanoseconds
+  std::vector<uint64_t> window_begin;   // Total time from the begin of the measure in nanoseconds
 
   std::vector<uint32_t> retrig_count;   // Vector of ATMD retrig counters
   std::vector<int32_t> stoptime;        // Vector of stoptimes in unit of Tbin
@@ -86,7 +86,7 @@ private:
  */
 class Measure {
 public:
-  Measure(): measure_begin(0), measure_time(0), incomplete(false) {};
+  Measure() {};
   ~Measure() {
     for(uint32_t i = 0; i < this->starts.size(); i++)
       delete starts[i];
@@ -101,9 +101,8 @@ public:
     for(uint32_t i = 0; i < this->starts.size(); i++)
       delete (starts[i]);
     this->starts.clear();
-    this->incomplete = false;
-    this->measure_begin = 0;
-    this->measure_time = 0;
+    this->measure_begin.clear();
+    this->measure_time.clear();
   };
 
   // Interface to count start events
@@ -118,22 +117,15 @@ public:
   };
 
   // Interface for managing effective measure time
-  void set_time(uint64_t begin, uint64_t end) {
-    this->measure_begin = begin;
-    this->measure_time = end - begin;
-  };
-  uint64_t get_time() { return measure_time; };
-  uint64_t get_begin() { return measure_begin; };
-
-  // Interface to manage incomplete flag
-  void set_incomplete(bool value) { incomplete = value; };
-  bool is_incomplete() { return incomplete; };
+  void add_time(uint64_t begin, uint64_t duration) { measure_begin.push_back(begin); measure_time.push_back(duration); };
+  size_t times()const { return measure_begin.size(); };
+  uint64_t get_time(size_t i) { return measure_time[i]; };
+  uint64_t get_begin(size_t i) { return measure_begin[i]; };
 
 private:
-  uint64_t measure_begin;           // Timestamp of measure start
-  uint64_t measure_time;            // Duration of measure
-  bool incomplete;                  // Incomplete flag
-  std::vector<StartData*> starts;   // Vector of pointers to start objects relative to this measure
+  std::vector<uint64_t> measure_begin;  // Timestamp of measure start
+  std::vector<uint64_t> measure_time;   // Duration of measure
+  std::vector<StartData*> starts;       // Vector of pointers to start objects relative to this measure
 };
 
 #endif

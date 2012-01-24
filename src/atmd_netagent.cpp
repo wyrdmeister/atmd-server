@@ -59,19 +59,17 @@ int AgentMsg::decode() {
       _version[ATMD_VER_LEN-1] = '\0';
       break;
 
-    case ATMD_CMD_PROTO:
-      // Here we expect a sigle uint16_t value
+    case ATMD_CMD_MEAS_SET:
+      // 0) agent_id -> UINT32
       val_type = *(_buffer+offset);
       offset++;
-      if(val_type != ATMD_TYPE_UINT16) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_PROTO argument has wrong type.");
+      if(val_type != ATMD_TYPE_UINT32) {
+        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
         return -1;
       }
-      _proto_id = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
-      break;
+      _agent_id = *(_buffer+offset);
+      offset += sizeof(uint32_t);
 
-    case ATMD_CMD_MEAS_SET:
       // 1) start_rising -> UINT8
       val_type = *(_buffer+offset);
       offset++;
@@ -152,6 +150,36 @@ int AgentMsg::decode() {
       _deadtime = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
       offset += sizeof(uint64_t);
 
+      // 9) start_offset -> UINT32
+      val_type = *(_buffer+offset);
+      offset++;
+      if(val_type != ATMD_TYPE_UINT32) {
+        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
+        return -1;
+      }
+      _start_offset = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
+      offset += sizeof(uint32_t);
+
+      // 10) refclk -> UINT16
+      val_type = *(_buffer+offset);
+      offset++;
+      if(val_type != ATMD_TYPE_UINT16) {
+        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
+        return -1;
+      }
+      _refclk = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
+      offset += sizeof(uint16_t);
+
+      // 11) hsdiv -> UINT16
+      val_type = *(_buffer+offset);
+      offset++;
+      if(val_type != ATMD_TYPE_UINT16) {
+        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
+        return -1;
+      }
+      _hsdiv = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
+      offset += sizeof(uint16_t);
+
       break;
 
     case ATMD_CMD_MEAS_CTR:
@@ -164,7 +192,7 @@ int AgentMsg::decode() {
       }
       _action = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
       offset += sizeof(uint16_t);
-      val_type = *(buffer+offset);
+      val_type = *(_buffer+offset);
       if(val_type != ATMD_TYPE_UINT32) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR argument has wrong type.");
         return -1;
@@ -173,6 +201,8 @@ int AgentMsg::decode() {
       break;
 
     case ATMD_CMD_ACK:
+    case ATMD_CMD_BUSY:
+    case ATMD_CMD_ERROR:
       // No arguments
       break;
 
@@ -213,28 +243,34 @@ int AgentMsg::encode() {
       break;
 
     case ATMD_CMD_MEAS_SET:
+      // 0) agent_id
+      *(_buffer+offset) = ATMD_TYPE_UINT32;
+      offset++;
+      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _agent_id;
+      offset += sizeof(uint32_t);
+
       // 1) start_rising -> UINT8
       *(_buffer+offset) = ATMD_TYPE_UINT8;
       offset++;
-      *(_buffer+offset) = _start_rising;
+      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _start_rising;
       offset += sizeof(uint8_t);
 
       // 2) start_falling -> UINT8
       *(_buffer+offset) = ATMD_TYPE_UINT8;
       offset++;
-      *(_buffer+offset) = _start_falling;
+      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _start_falling;
       offset += sizeof(uint8_t);
 
       // 3) rising_mask -> UINT8
       *(_buffer+offset) = ATMD_TYPE_UINT8;
       offset++;
-      *(_buffer+offset) = _rising_mask;
+      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _rising_mask;
       offset += sizeof(uint8_t);
 
       // 4) falling_mask -> UINT8
       *(_buffer+offset) = ATMD_TYPE_UINT8;
       offset++;
-      *(_buffer+offset) = _falling_mask;
+      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _falling_mask;
       offset += sizeof(uint8_t);
 
       // 5) measure_time -> UINT64
@@ -262,6 +298,27 @@ int AgentMsg::encode() {
       offset += sizeof(uint64_t);
       break;
 
+      // 9) start_offset -> UINT32
+      *(_buffer+offset) = ATMD_TYPE_UINT32;
+      offset++;
+      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _start_offset;
+      offset += sizeof(uint32_t);
+      break;
+
+      // 10) refclk -> UINT16
+      *(_buffer+offset) = ATMD_TYPE_UINT16;
+      offset++;
+      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _refclk;
+      offset += sizeof(uint16_t);
+      break;
+
+      // 11) hsdiv -> UINT16
+      *(_buffer+offset) = ATMD_TYPE_UINT16;
+      offset++;
+      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _hsdiv;
+      offset += sizeof(uint16_t);
+      break;
+
     case ATMD_CMD_MEAS_CTR:
       *(_buffer+offset) = ATMD_TYPE_UINT16;
       offset++;
@@ -269,11 +326,13 @@ int AgentMsg::encode() {
       offset += sizeof(uint16_t);
       *(_buffer+offset) = ATMD_TYPE_UINT32;
       offset++;
-      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _tmda_cycle;
+      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _tdma_cycle;
       offset += sizeof(uint32_t);
       break;
 
     case ATMD_CMD_ACK:
+    case ATMD_CMD_BUSY:
+    case ATMD_CMD_ERROR:
       break;
 
     default:
@@ -407,6 +466,19 @@ int DataMsg::decode() {
   // Get packet type
   _type = *( reinterpret_cast<uint16_t*>(_buffer) );
   offset += sizeof(uint16_t);
+
+  // ATMD_DT_TERM needs different handling
+  if(_type == ATMD_DT_TERM) {
+    // Measure start time
+    _window_start = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
+    offset += sizeof(uint64_t);
+
+    // Measure duration
+    _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
+    offset += sizeof(uint64_t);
+
+    return 0;
+  }
 
   // Read number of events
   _numev = *( reinterpret_cast<uint16_t*>(_buffer) );

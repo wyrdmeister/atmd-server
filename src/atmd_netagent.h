@@ -30,15 +30,16 @@
 #define ATMD_CMD_BADTYPE    0   // Bad type. Returned on unknown command
 #define ATMD_CMD_BRD        1   // Broadcast message
 #define ATMD_CMD_HELLO      2   // Hello message (answer to broadcast)
-#define ATMD_CMD_PROTO      3   // Set data protocol ID
-#define ATMD_CMD_MEAS_SET   4   // Configure measure parameters
-#define ATMD_CMD_MEAS_CTR   5   // Control measure
-#define ATMD_CMD_ACK        6   // Acknowledge
-#define ATMD_DT_FIRST       7   // First data packet
-#define ATMD_DT_ONLY        8   // Single data packet for this start
-#define ATMD_DT_DATA        9   // General data packet
-#define ATMD_DT_LAST       10   // Final data packet
-#define ATMD_DT_TERM       11   // Measure termination packet
+#define ATMD_CMD_MEAS_SET   3   // Configure measure parameters
+#define ATMD_CMD_MEAS_CTR   4   // Control measure
+#define ATMD_CMD_ACK        5   // Acknowledge
+#define ATMD_CMD_BUSY       6   // Agent busy
+#define ATMD_CMD_ERROR      7   // Agent error
+#define ATMD_DT_FIRST       8   // First data packet
+#define ATMD_DT_ONLY        9   // Single data packet for this start
+#define ATMD_DT_DATA       10   // General data packet
+#define ATMD_DT_LAST       11   // Final data packet
+#define ATMD_DT_TERM       12   // Measure termination packet
 
 // Actions
 #define ATMD_ACTION_NOACTION 0
@@ -85,8 +86,8 @@ public:
   uint16_t type()const { return _type; };
 
   // Handle buffer
-  const uint8_t* get_buffer()const { return _buffer; };
-  uint8_t* get_buffer() { return _buffer; };
+  const char* get_buffer()const { return _buffer; };
+  char* get_buffer() { return _buffer; };
   size_t size()const { return _size; };
   size_t maxsize()const { return ATMD_PACKET_SIZE; };
 
@@ -103,7 +104,7 @@ protected:
   uint16_t _size;
 
   // Buffer
-  uint8_t _buffer[ATMD_PACKET_SIZE];
+  char _buffer[ATMD_PACKET_SIZE];
 };
 
 
@@ -125,11 +126,11 @@ public:
   void version(const char * val) { strncpy(_version, val, ATMD_VER_LEN); _version[ATMD_VER_LEN-1] = '\0'; };
   const char * version()const { return _version; };
 
-  // Manage protocol ID
-  void protocol(uint16_t val) { _proto_id = val; };
-  uint16_t protocol()const { return _proto_id; };
+  // Manage agent ID
+  void agent_id(uint32_t val) { _agent_id = val; };
+  uint32_t agent_id()const { return _agent_id; };
 
-  // Manage measure info
+  // Channel info
   void start_rising(uint8_t val) { _start_rising = val; };
   uint8_t start_rising()const { return _start_rising; };
   void start_falling(uint8_t val) { _start_falling = val; };
@@ -138,6 +139,8 @@ public:
   uint8_t rising_mask()const { return _rising_mask; };
   void falling_mask(uint8_t val) { _falling_mask = val; };
   uint8_t falling_mask()const { return _falling_mask; };
+
+  // Timing info
   void measure_time(uint64_t val) { _measure_time = val; };
   uint64_t measure_time()const { return _measure_time; };
   void window_time(uint64_t val) { _window_time = val; };
@@ -146,6 +149,14 @@ public:
   uint64_t timeout()const { return _timeout; };
   void deadtime(uint64_t val) { _deadtime = val; };
   uint64_t deadtime()const { return _deadtime; };
+
+  // Board parameters
+  void start_offset(uint32_t val) { _start_offset = val; };
+  uint32_t start_offset()const { return _start_offset; };
+  void refclk(uint16_t val) { _refclk = val; };
+  uint16_t refclk()const { return _refclk; };
+  void hsdiv(uint16_t val) { _hsdiv = val; };
+  uint16_t hsdiv()const { return _hsdiv; };
 
   // Manage measure action
   void action(uint16_t val) { _action = val; };
@@ -159,7 +170,7 @@ public:
   void clear() {
     GenMsg::clear();
     memset(_version, 0, ATMD_VER_LEN);
-    _proto_id = 0;
+    _agent_id = 0;
     _start_rising = 0;
     _start_falling = 0;
     _rising_mask = 0;
@@ -168,6 +179,9 @@ public:
     _window_time = 0;
     _timeout = 0;
     _deadtime = 0;
+    _start_offset = 0;
+    _refclk = 0;
+    _hsdiv = 0;
     _action = ATMD_ACTION_NOACTION;
     _tdma_cycle = 0;
   };
@@ -176,8 +190,8 @@ private:
   // Version string for broadcast / hello messages
   char _version[ATMD_VER_LEN];
 
-  // Protocol ID
-  uint16_t _proto_id;
+  // Agent ID
+  uint32_t _agent_id;
 
   // Measure info
   uint8_t _start_rising;
@@ -188,6 +202,9 @@ private:
   uint64_t _window_time;
   uint64_t _timeout;
   uint64_t _deadtime;
+  uint32_t _start_offset;
+  uint16_t _refclk;
+  uint16_t _hsdiv;
 
   // Measure action
   uint16_t _action;

@@ -24,9 +24,14 @@
 
 // Global
 #include <string.h>
+#include <math.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <pwd.h>
 #include <vector>
 #include <string>
 #include <sstream>
+#include <curl/curl.h>
 
 // Xenomai
 #include <native/task.h>
@@ -39,6 +44,7 @@
 #include "atmd_netagent.h"
 #include "atmd_timings.h"
 #include "atmd_measure.h"
+#include "MatFile.h"
 
 
 /* @class AgentDescriptor
@@ -71,7 +77,7 @@ class VirtualBoard {
 public:
   // Constructor and destructor
   VirtualBoard(AtmdConfig &obj) : _config(obj) { clear_config(); };
-  ~VirtualBoard() {}; // TODO: destructor should join threads...
+  ~VirtualBoard() { curl_easy_cleanup(this->easy_handle); }; // TODO: destructor should join threads...
 
   // Start all the relevant RT tasks and sends broadcasts to find agents
   int init();
@@ -138,6 +144,7 @@ public:
   // Setup resolution
   void set_resolution(uint16_t clk, uint16_t hs) { _refclk = clk; _hsdiv = hs; };
   void get_resolution(uint16_t& clk, uint16_t& hs)const { clk = _refclk; hs = _hsdiv; };
+  double get_tbin()const { return (ATMD_TREF * pow(2.0, _refclk) / (216 * _hsdiv) * 1e12); };
 
   // Setup start offset
   void set_start_offset(uint32_t val) { _offset = val; };
@@ -205,7 +212,10 @@ public:
   };
 
   // Save measure
-  int save_measure(size_t id, std::string name);
+  int save_measure(size_t measure_number, std::string filename);
+
+  // CURL callback
+  static size_t curl_read(void *ptr, size_t size, size_t count, void *data);
 
   // Start measure
   int start_measure();
@@ -218,33 +228,13 @@ public:
   int status()const { return _status; };
 
   // Manage command queue
-  void recv_command(GenMsg& packet) throw(int) {
-    void * buffer = NULL;
-    // Receive packet
-    int retval = rt_queue_receive(&_ctrl_queue, &buffer, TM_INFINITE);
-    if(retval < 0) {
-      rt_syslog(ATMD_CRIT, "VirtualBoard [recv_command]: failed to send command to control queue.");
-      throw(retval);
-    }
-    // Copy buffer
-    memcpy(packet.get_buffer(), buffer, retval);
-    // Free buffer
-    rt_queue_free(&_ctrl_queue, buffer);
-  };
-  void send_command(const GenMsg& packet) throw(int) {
-    // Alloc buffer
-    void * buffer = rt_queue_alloc(&_ctrl_queue, packet.size());
-    if(!buffer)
-      throw(ATMD_ERR_ALLOC);
-    // Copy packet
-    memcpy(buffer, packet.get_buffer(), packet.size());
-    // Send packet
-    int retval = rt_queue_send(&_ctrl_queue, packet.get_buffer(), packet.size(), Q_NORMAL);
-    if(retval < 0) {
-      rt_syslog(ATMD_CRIT, "VirtualBoard [send_command]: failed to send command to control queue. Error: %d.", retval);
-      throw(ATMD_ERR_QUEUE);
-    }
-  }
+  void recv_command(GenMsg& packet) throw(int);
+  void send_command(const GenMsg& packet) throw(int);
+
+  // Autosave counter
+  void reset_counter() { _auto_counter = 0; };
+  size_t get_counter()const { return _auto_counter; };
+  void increment_counter() { _auto_counter++; };
 
 private:
   // Config object reference
@@ -300,6 +290,10 @@ private:
   uint32_t _refclk;
   uint32_t _hsdiv;
 
+  // CURL easy handle
+  CURL* easy_handle;
+  char curl_error[CURL_ERROR_SIZE];
+
   // FTP data
   std::string _hostname;
   std::string _username;
@@ -310,6 +304,9 @@ private:
 
   // Autosave after numofstarts
   uint32_t _autosave;
+
+  // Autosave counter
+  size_t _auto_counter;
 
   // Save format
   uint32_t _format;

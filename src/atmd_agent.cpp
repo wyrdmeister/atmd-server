@@ -502,7 +502,9 @@ int main(int argc, char * const argv[]) {
       break;
 
     // Wait for a control packet
-    if(ctrl_sock.recv(ctrl_packet, &remote_addr)) {
+    try {
+      ctrl_sock.recv(ctrl_packet, &remote_addr);
+    } catch(int e) {
       rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
       // TODO: add cleanup of RT tasks
       ctrl_sock.close();
@@ -528,7 +530,39 @@ int main(int argc, char * const argv[]) {
         break;
 
       case ATMD_CMD_MEAS_SET:
-        measure_info.set(ctrl_packet);
+        // Store configuration into board
+        // Init measure
+        board.start_rising(ctrl_packet.start_rising());
+        board.start_falling(ctrl_packet.start_falling());
+        board.set_rising_mask(ctrl_packet.rising_mask());
+        board.set_falling_mask(ctrl_packet.falling_mask());
+        board.start_offset(ctrl_packet.start_offset());
+        board.set_resolution(ctrl_packet.refclk(), ctrl_packet.hsdiv());
+
+         // Set measure info
+        measure_info.measure_time(ctrl_packet.measure_time());
+        measure_info.window_time(ctrl_packet.window_time());
+        measure_info.timeout(ctrl_packet.timeout());
+        measure_info.deadtime(ctrl_packet.deadtime());
+
+        // Configure board
+        if(board.config())
+          // PLL not locked. Abort measure
+          board.status(ATMD_STATUS_ERR);
+
+        // Send back ACK
+        ctrl_packet.clear();
+        ctrl_packet.type(ATMD_CMD_ACK);
+        ctrl_packet.encode();
+        try {
+          ctrl_sock.send(ctrl_packet, &master_addr);
+        } catch(int e) {
+          rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
+          // TODO: add cleanup of RT tasks
+          ctrl_sock.close();
+          data_sock.close();
+          exit(-1);
+        }
         break;
 
       case ATMD_CMD_MEAS_CTR:
@@ -567,7 +601,21 @@ int main(int argc, char * const argv[]) {
                 }
               }
 
-              // 2) resume measurement thread
+              // 2) Send ACK
+              ctrl_packet.clear();
+              ctrl_packet.type(ATMD_CMD_ACK);
+              ctrl_packet.encode();
+              try {
+                ctrl_sock.send(ctrl_packet, &master_addr);
+              } catch(int e) {
+                rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
+                // TODO: add cleanup of RT tasks
+                ctrl_sock.close();
+                data_sock.close();
+                exit(-1);
+              }
+
+              // 3) resume measurement thread
               retval = rt_task_resume(&meas_th);
               if(retval) {
                 switch(retval) {
@@ -581,11 +629,20 @@ int main(int argc, char * const argv[]) {
                 }
               }
 
-              // 3) send back ACK
-              // TODO
-
             } else {
-              // TODO: send back error
+              // Send back BUSY or ERROR
+              ctrl_packet.clear();
+              ctrl_packet.type( (board.status() == ATMD_STATUS_ERR) ? ATMD_CMD_ERROR : ATMD_CMD_BUSY );
+              ctrl_packet.encode();
+              try {
+                ctrl_sock.send(ctrl_packet, &master_addr);
+              } catch(int e) {
+                rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
+                // TODO: add cleanup of RT tasks
+                ctrl_sock.close();
+                data_sock.close();
+                exit(-1);
+              }
             }
 
             // Send ack to master

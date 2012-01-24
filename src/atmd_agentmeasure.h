@@ -74,18 +74,6 @@ public:
  */
 class MeasureDef {
 public:
-  // Manage start signal
-  void start_rising(bool val) { _en_start[0] = val; };
-  bool start_rising() { return _en_start[0]; };
-  void start_falling(bool val) { _en_start[1] = val; };
-  bool start_falling() { return _en_start[1]; };
-
-  // Manage stop channel
-  void ch_rising(int8_t ch, bool val) { _ch_rising[ch-1] = val; };
-  bool ch_rising(int8_t ch) { return _ch_rising[ch-1]; };
-  void ch_falling(int8_t ch, bool val) { _ch_falling[ch-1] = val; };
-  bool ch_falling(int8_t ch) { return _ch_falling[ch-1]; };
-
   // Manage timings
   void measure_time(RTIME time) { _measure_time = time; };
   RTIME measure_time() { return _measure_time; };
@@ -100,28 +88,7 @@ public:
   void tdma_cycle(uint32_t val) { _tdma_cycle = val; };
   uint32_t tdma_cycle()const { return _tdma_cycle; };
 
-  // Setup structure
-  void set(const AgentMsg& packet) {
-    _en_start[0] = packet.start_rising();
-    _en_start[1] = packet.start_falling();
-    for(size_t i = 0; i < 8; i++)
-      if( packet.rising_mask() & (0x1 << i) )
-        _ch_rising[i] = true;
-    for(size_t i = 0; i < 8; i++)
-      if( packet.falling_mask() & (0x1 << i) )
-        _ch_falling[i] = true;
-    _measure_time = packet.measure_time();
-    _window_time = packet.window_time();
-    _timeout = packet.timeout();
-    _deadtime = packet.deadtime();
-  }
-
 private:
-  // Channels
-  bool _en_start[2];
-  bool _ch_rising[8];
-  bool _ch_falling[8];
-
   // Timings
   RTIME _measure_time;
   RTIME _window_time;
@@ -139,7 +106,7 @@ private:
 class EventData {
 public:
   // Contructors
-  EventData(RT_HEAP *heap) : _ch(heap), _stop(heap), _retrig(heap), _start01(0), _tbin(0.0), _window_begin(0), _window_end(0) {};
+  EventData(RT_HEAP *heap) : _ch(heap), _stop(heap), _retrig(heap), _window_begin(0), _window_end(0) {};
 
   // Destructor
   ~EventData() {};
@@ -181,14 +148,14 @@ public:
   RTIME end()const { return _window_end; };
 
   // Add start01 where needed
-  void compute_start01() {
+  void compute_start01(uint32_t start01) {
     for(size_t i = 0; i < this->size(); i++) {
       if(_retrig[i] > 0) {
-        _stop[i] = _stop[i] + this->_start01;
+        _stop[i] = _stop[i] + start01;
         _retrig[i] = _retrig[i] - 1;
       }
     }
-  }
+  };
 
 private:
   // HEAP obj for dynamic allocation
@@ -196,7 +163,7 @@ private:
 
   // Vectors to handle data
   xenovec<int8_t> _ch;
-  xenovec<uint32_t> _stop;
+  xenovec<int32_t> _stop;
   xenovec<uint32_t> _retrig;
 
   // Timings

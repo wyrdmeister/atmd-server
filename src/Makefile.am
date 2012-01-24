@@ -1,6 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
-AM_CFLAGS = -Wall -g
+AM_CXXFLAGS = -Wall -g -fno-strict-aliasing
+#AM_CXXFLAGS = -Wall -g
 
 bin_PROGRAMS = atmd_server atmd_agent
 

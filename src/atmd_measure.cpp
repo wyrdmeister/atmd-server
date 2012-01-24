@@ -68,7 +68,7 @@ void StartData::reserve(size_t sz) {
  * @param ch A reference to an output var for the channel
  * @return Return 0 on success, -1 on error.
  */
-int StartData::get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& ch) {
+int StartData::get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& ch)const {
   if(num < this->retrig_count.size()) {
     retrig = this->retrig_count[num];
     stop = this->stoptime[num];
@@ -87,13 +87,13 @@ int StartData::get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& 
  * @param ch A reference to an output var for the channel
  * @return Return 0 on success, -1 on error.
  */
-// int StartData::get_channel(uint32_t num, int8_t& ch) {
-//   if(num < this->channel.size())
-//     ch = this->channel[num];
-//   else
-//     return -1;
-//   return 0;
-// }
+int StartData::get_channel(uint32_t num, int8_t& ch)const {
+  if(num < this->channel.size())
+    ch = this->channel[num];
+  else
+    return -1;
+  return 0;
+}
 
 
 /* @fn StartData::get_stoptime(uint32_t num, double& stop)
@@ -103,7 +103,7 @@ int StartData::get_event(uint32_t num, uint32_t& retrig, int32_t& stop, int8_t& 
  * @param stop A reference to an output var for the stoptime in ps (double precision)
  * @return Return 0 on success, -1 on error.
  */
-int StartData::get_stoptime(uint32_t num, double& stop) {
+int StartData::get_stoptime(uint32_t num, double& stop)const {
   if(num < this->retrig_count.size()) {
     stop = (double)(this->stoptime[num]) * this->time_bin + (double)(this->retrig_count[num]) * (ATMD_AUTORETRIG + 1) * ATMD_TREF * 1e12;
 
@@ -124,7 +124,7 @@ int StartData::get_stoptime(uint32_t num, double& stop) {
  * @param stop A reference to an output var for the stoptime in ps (double precision)
  * @return Return 0 on success, -1 on error.
  */
-int StartData::get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop) {
+int StartData::get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop)const {
   if(num < this->retrig_count.size()) {
     stop = (double)this->stoptime[num] * this->time_bin;
     retrig = this->retrig_count[num];
@@ -166,10 +166,18 @@ int Measure::add_start(std::vector<StartData*>& svec) {
       svec[i]->get_event(j, retrig, stop, ch);
       merged->add_event(retrig, stop, ch);
     }
+
+    // Window times
+    if(svec[i]->times())
+      merged->add_time(svec[i]->get_window_begin(0), svec[i]->get_window_time(0));
+    else
+      syslog(ATMD_ERR, "Measure [add_start]: StartData was missing the window start and duration.");
   }
 
-  // TODO: manage window times...
+  // Add tbin
+  merged->set_tbin(svec[0]->get_tbin());
 
+  // Add start to measure
   try {
     this->starts.push_back(merged);
     return 0;
