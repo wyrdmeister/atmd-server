@@ -41,7 +41,7 @@ void rt_measure(void *arg);
  */
 void direct_measure(void* arg) {
 
-	int rval = rt_task_set_mode(T_WARNSW | T_RPIOFF, T_PRIMARY | T_NOSIG, NULL);
+	int rval = rt_task_set_mode(T_WARNSW | T_RPIOFF, T_NOSIG, NULL);
 	if(rval)
 		syslog(ATMD_ERR, "Measure [Direct read RT]: task set mode failed with error \"%s\" [%d].", (rval == -EINVAL) ? "invalid bitmask" : ((rval == -EPERM) ? "wrong context" : "unknown error"), rval);
 
@@ -103,7 +103,7 @@ void direct_measure(void* arg) {
 	data_exch.events = new struct rt_event[sizeof(struct rt_event) * board->get_max_ev()]; // NOTE memory allocation switches to secondary mode
 
 	// Enforce again primary mode
-	rval = rt_task_set_mode(T_WARNSW | T_RPIOFF, T_PRIMARY | T_NOSIG, NULL);
+	rval = rt_task_set_mode(T_WARNSW | T_RPIOFF, T_NOSIG, NULL);
 	if(rval)
 		syslog(ATMD_ERR, "Measure [Direct read RT]: task set mode failed with error \"%s\" [%d].", (rval == -EINVAL) ? "invalid bitmask" : ((rval == -EPERM) ? "wrong context" : "unknown error"), rval);
 
@@ -223,7 +223,7 @@ void direct_measure(void* arg) {
 					syslog(ATMD_DEBUG, "Measure [Direct read mode]: added start %d with %d stops.", measure_start_counter, current_start->count_stops());
 
 				// Here we ended the part that requires standard syscalls so we can enforce again primary mode
-				rval = rt_task_set_mode(0, T_PRIMARY | T_NOSIG, NULL);
+				rval = rt_task_set_mode(0, T_NOSIG, NULL);
 				if(rval)
 					syslog(ATMD_ERR, "Measure [Direct read RT]: task set mode failed with error \"%s\" [%d].", (rval == -EINVAL) ? "invalid bitmask" : ((rval == -EPERM) ? "wrong context" : "unknown error"), rval);
 			}
@@ -312,7 +312,7 @@ void rt_measure(void *arg) {
 		syslog(ATMD_DEBUG, "Measure [Direct read RT]: started real time task.");
 
 	// Make sure we are in primary mode!
-	int rval = rt_task_set_mode(0, T_PRIMARY | T_WARNSW | T_NOSIG, NULL); //T_LOCK |
+	int rval = rt_task_set_mode(0, T_WARNSW | T_NOSIG, NULL); //T_LOCK |
 	if(rval)
 		syslog(ATMD_ERR, "Measure [Direct read RT]: task set mode failed with error \"%s\" [%d].", (rval == -EINVAL) ? "invalid bitmask" : ((rval == -EPERM) ? "wrong context" : "unknown error"), rval);
 
