@@ -3,7 +3,6 @@ dnl Process this file with autoconf to produce a configure script.
 AC_INIT(atmd_server, 2.5)
 
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
-AC_CONFIG_HEADERS([config.h])
 
 AC_ISC_POSIX
 AC_PROG_CXX
@@ -29,7 +28,7 @@ AC_MSG_CHECKING([for Xenomai version])
 XENO_VERSION="`${XENO_CONFIG} --version`"
 
 case "$XENO_VERSION" in
-    2.5*)
+    2.5*|2.6*)
         AC_MSG_RESULT([${XENO_VERSION}])
         ;;
     *)

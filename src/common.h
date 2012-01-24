@@ -120,9 +120,6 @@
 #define ATMD_NETERR_AUTORANGE      16
 #define ATMD_NETERR_AUTOSTART      17
 
-/* Configure defines */
-#include "../config.h"
-
 /* Standard includes */
 #include <iostream>
 #include <fstream>

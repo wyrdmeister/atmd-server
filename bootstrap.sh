@@ -1,7 +1,6 @@
 #!/bin/sh
 
 # Script to setup autoconf
-autoheader
 touch stamp-h
 aclocal
 autoconf
