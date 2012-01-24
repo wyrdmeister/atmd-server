@@ -217,6 +217,34 @@ public:
   void status(int val) { _status = val; };
   int status()const { return _status; };
 
+  // Manage command queue
+  void recv_command(GenMsg& packet) throw(int) {
+    void * buffer = NULL;
+    // Receive packet
+    int retval = rt_queue_receive(&_ctrl_queue, &buffer, TM_INFINITE);
+    if(retval < 0) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [recv_command]: failed to send command to control queue.");
+      throw(retval);
+    }
+    // Copy buffer
+    memcpy(packet.get_buffer(), buffer, retval);
+    // Free buffer
+    rt_queue_free(&_ctrl_queue, buffer);
+  };
+  void send_command(const GenMsg& packet) throw(int) {
+    // Alloc buffer
+    void * buffer = rt_queue_alloc(&_ctrl_queue, packet.size());
+    if(!buffer)
+      throw(ATMD_ERR_ALLOC);
+    // Copy packet
+    memcpy(buffer, packet.get_buffer(), packet.size());
+    // Send packet
+    int retval = rt_queue_send(&_ctrl_queue, packet.get_buffer(), packet.size(), Q_NORMAL);
+    if(retval < 0) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [send_command]: failed to send command to control queue. Error: %d.", retval);
+      throw(ATMD_ERR_QUEUE);
+    }
+  }
 
 private:
   // Config object reference
@@ -224,6 +252,12 @@ private:
 
   // Handle of the RT control task
   RT_TASK _ctrl_task;
+
+  // Control RT socket
+  RTnet _ctrl_sock;
+
+  // Control queue
+  RT_QUEUE _ctrl_queue;
 
   // Handle of the RT data task
   RT_TASK _rt_data_task;
@@ -233,9 +267,6 @@ private:
 
   // Vector of DataTask structures
   std::vector<AgentDescriptor> _agents;
-
-  // Control RT socket
-  RTnet _ctrl_sock;
 
   // Data socket
   RTnet _data_sock;

@@ -66,6 +66,7 @@
 #define ATMD_ERR_SOCK       6     // Error creating socket
 #define ATMD_ERR_LISTEN     7     // Error listening on the network interface
 #define ATMD_ERR_TERM       8     // Termination interrupt set
+#define ATMD_ERR_QUEUE      9     // Error on a RT queue
 #define ATMD_ERR_UNKNOWN_EX 0xFF  // Unknown error...
 
 // RT object names

@@ -240,8 +240,13 @@ void VirtualBoard::control_task(void *arg) {
   }
 
   // Now agents are configured. We can cycle for commands on RTnet...
-  // TODO...
+  while(true) {
 
+    // Wait for a packet on the queue
+
+    // If the packet is start
+    
+  }
 }
 
 
