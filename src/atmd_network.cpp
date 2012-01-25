@@ -512,7 +512,26 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 #endif
 
       if(board.set_timeout(txt)) {
-        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as the total measurement time (\"%s\")", txt.c_str());
+        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as the timeout time (\"%s\")", txt.c_str());
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
+      } else {
+        this->send_command("ACK");
+      }
+      return 0;
+    }
+
+    // Catching deadtime time setup command
+    cmd_re = "TD ([0-9\\.]+[umsMh]{0,1})";
+
+    if(cmd_re.FullMatch(parameters)) {
+      cmd_re.FullMatch(parameters, &txt);
+#ifdef DEBUG
+      if(enable_debug)
+        syslog(ATMD_DEBUG, "Network [exec_command]: setting total measure time to \"%s\".", txt.c_str());
+#endif
+
+      if(board.set_deadtime(txt)) {
+        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as deadtime (\"%s\")", txt.c_str());
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
       } else {
         this->send_command("ACK");
