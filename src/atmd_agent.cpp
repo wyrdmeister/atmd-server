@@ -319,6 +319,7 @@ int main(int argc, char * const argv[]) {
 
   // Agent message object
   AgentMsg ctrl_packet;
+  int opcode = 0;
 
   // Wait for master broadcast
   struct ether_addr master_addr;
@@ -437,24 +438,9 @@ int main(int argc, char * const argv[]) {
     rt_syslog(ATMD_DEBUG, "Successfully created RT heap.");
 #endif
 
-  // Create RT_QUEUE
-  RTqueue ctrl_queue;
-  if(ctrl_queue.init(ATMD_RT_CTRL_QUEUE, 200000)) {
-    rt_syslog(ATMD_CRIT, "Failed to init control queue.");
-    ctrl_sock.close();
-    data_sock.close();
-    exit(-1);
-  }
-
-#ifdef DEBUG
-  if(enable_debug)
-    rt_syslog(ATMD_DEBUG, "Successfully created RT control queue.");
-#endif
-
   // Init thread params
   InitData th_info;
   th_info.heap_name = ATMD_RT_HEAP_NAME;
-  th_info.queue = &ctrl_queue;
   th_info.board = &board;
   th_info.sock = &data_sock;
   th_info.addr = &master_addr;
@@ -489,6 +475,16 @@ int main(int argc, char * const argv[]) {
   if(enable_debug)
     rt_syslog(ATMD_DEBUG, "Successfully spawned RT data task.");
 #endif
+
+  // Create control interface
+  RTcomm ctrl_if;
+  if(ctrl_if.init(&meas_th)) {
+    rt_syslog(ATMD_CRIT, "Failed to init control interface. Terminating.");
+    // TODO: add cleanup of RT tasks
+    ctrl_sock.close();
+    data_sock.close();
+    exit(-1);
+  }
 
   // Remote address
   struct ether_addr remote_addr;
@@ -539,7 +535,7 @@ int main(int argc, char * const argv[]) {
         board.start_offset(ctrl_packet.start_offset());
         board.set_resolution(ctrl_packet.refclk(), ctrl_packet.hsdiv());
 
-         // Set measure info
+        // Set measure info
         measure_info.measure_time(ctrl_packet.measure_time());
         measure_info.window_time(ctrl_packet.window_time());
         measure_info.timeout(ctrl_packet.timeout());
@@ -557,7 +553,7 @@ int main(int argc, char * const argv[]) {
         try {
           ctrl_sock.send(ctrl_packet, &master_addr);
         } catch(int e) {
-          rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
+          rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
           // TODO: add cleanup of RT tasks
           ctrl_sock.close();
           data_sock.close();
@@ -571,46 +567,27 @@ int main(int argc, char * const argv[]) {
             // Start a new measurement
             if(board.status() == ATMD_STATUS_IDLE) {
 
-              // 1) enqueue the MeasureDef struct
+              // 1) Store TDMA cycle
               measure_info.tdma_cycle(ctrl_packet.tdma_cycle());
-              if(ctrl_queue.send(reinterpret_cast<const char*>(&measure_info), sizeof(measure_info))) {
-                rt_syslog(ATMD_CRIT, "Failed to send message to the control queue.");
+
+              // 2) Send measure_info
+              opcode = ATMD_ACTION_START;
+              size_t ctrl_size = ctrl_packet.maxsize();
+              if(ctrl_if.send(opcode, &measure_info, sizeof(measure_info), ctrl_packet.get_buffer(), &ctrl_size)) {
+                rt_syslog(ATMD_CRIT, "Failed to send message to the measurement thread.");
                 // TODO: add cleanup of RT tasks!
                 ctrl_sock.close();
                 data_sock.close();
                 exit(-1);
               }
 
-              // 2) Send ACK
-              ctrl_packet.clear();
-              ctrl_packet.type(ATMD_CMD_ACK);
-              ctrl_packet.encode();
+              // 3) Send packet back!
               if(ctrl_sock.send(ctrl_packet, &master_addr)) {
-                rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
+                rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
                 // TODO: add cleanup of RT tasks
                 ctrl_sock.close();
                 data_sock.close();
                 exit(-1);
-              }
-
-              // 3) resume measurement thread
-              retval = rt_task_resume(&meas_th);
-              if(retval) {
-                switch(retval) {
-                  case -EINVAL:
-                  case -EIDRM:
-                    rt_syslog(ATMD_CRIT, "rt_task_resume(): failed. Invalid task descriptor.");
-                    // TODO: add cleanup of RT tasks
-                    ctrl_sock.close();
-                    data_sock.close();
-                    exit(-1);
-                  default:
-                    rt_syslog(ATMD_CRIT, "rt_task_resume(): failed with unexpected return value (%d).", retval);
-                    // TODO: add cleanup of RT tasks
-                    ctrl_sock.close();
-                    data_sock.close();
-                    exit(-1);
-                }
               }
 
             } else {
@@ -619,7 +596,7 @@ int main(int argc, char * const argv[]) {
               ctrl_packet.type( (board.status() == ATMD_STATUS_ERR) ? ATMD_CMD_ERROR : ATMD_CMD_BUSY );
               ctrl_packet.encode();
               if(ctrl_sock.send(ctrl_packet, &master_addr)) {
-                rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
+                rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
                 // TODO: add cleanup of RT tasks
                 ctrl_sock.close();
                 data_sock.close();
@@ -633,9 +610,31 @@ int main(int argc, char * const argv[]) {
           case ATMD_ACTION_STOP:
             if(board.status() == ATMD_STATUS_RUNNING) {
               board.stop(true);
-              // TODO: send back ACK
+
+              // Send ACK
+              ctrl_packet.clear();
+              ctrl_packet.type(ATMD_CMD_ACK);
+              ctrl_packet.encode();
+              if(ctrl_sock.send(ctrl_packet, &master_addr)) {
+                rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
+                // TODO: add cleanup of RT tasks
+                ctrl_sock.close();
+                data_sock.close();
+                exit(-1);
+              }
+
             } else {
-              // TODO: send back error
+              // Send ERROR
+              ctrl_packet.clear();
+              ctrl_packet.type(ATMD_CMD_ERROR);
+              ctrl_packet.encode();
+              if(ctrl_sock.send(ctrl_packet, &master_addr)) {
+                rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
+                // TODO: add cleanup of RT tasks
+                ctrl_sock.close();
+                data_sock.close();
+                exit(-1);
+              }
             }
             break;
 
@@ -657,7 +656,7 @@ int main(int argc, char * const argv[]) {
   data_sock.close();
 
   // Unsuspend measurement thread
-  rt_task_notify(&meas_th, SIGHUP);
+  rt_task_unblock(&meas_th);
 
   // Wait on measurement thread termination
   rt_task_join(&meas_th);

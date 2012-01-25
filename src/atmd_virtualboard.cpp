@@ -71,12 +71,6 @@ int VirtualBoard::init() {
     return -1;
   }
 
-  // Init the command queue
-  if(_ctrl_queue.init(ATMD_RT_CTRL_QUEUE)) {
-    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to initialize RT control queue.");
-    return -1;
-  }
-
   // Init the data queue
   if(_data_queue.init(ATMD_RT_DATA_QUEUE, 10000000)) {
     syslog(ATMD_CRIT, "VirtualBoard [init]: failed to initialize RT data queue.");
@@ -132,6 +126,12 @@ int VirtualBoard::init() {
     return -1;
   }
 
+  // Init the control interface
+  if(_ctrl_if.init(&_ctrl_task)) {
+    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init control interface.");
+    return -1;
+  }
+
   // Then we can start the data retrieving task.
   retval = rt_task_spawn(&_rt_data_task, ATMD_RT_DATA_TASK, 0, 75, T_FPU|T_JOINABLE, VirtualBoard::rt_data_task, (void*)this);
   if(retval) {
@@ -182,33 +182,16 @@ int VirtualBoard::init() {
 }
 
 
-/* @fn int VirtualBoard::recv_command(GenMsg& packet)const
- *
+/* @fn int VirtualBoard::send_command(GenMsg& packet)
+ * This function sends a control message and wait for a reply. The reply is stored
+ * in the same message object passed to send data.
  */
-int VirtualBoard::recv_command(GenMsg& packet) {
-
-  // Receive packet
-  size_t msg_size = packet.maxsize();
-  if(_ctrl_queue.recv(packet.get_buffer(), msg_size)) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [recv_command]: failed to send command to control queue.");
+int VirtualBoard::send_command(int& opcode, GenMsg& packet) {
+  size_t sz = packet.maxsize();
+  if(_ctrl_if.send(opcode, packet.get_buffer(), packet.size(), packet.get_buffer(), &sz)) {
+    syslog(ATMD_ERR, "VirtualBoard [send_command]: failed to send control command.");
     return -1;
   }
-
-  return 0;
-};
-
-
-/* @fn int VirtualBoard::send_command(const GenMsg& packet)const
- *
- */
-int VirtualBoard::send_command(const GenMsg& packet) {
-
-  // Send packet
-  if(_ctrl_queue.send(packet.get_buffer(), packet.size())) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [send_command]: failed to send command to control queue.");
-    return -1;
-  }
-
   return 0;
 }
 
@@ -227,6 +210,11 @@ void VirtualBoard::control_task(void *arg) {
 
   // Cast back 'this' pointer
   VirtualBoard * pthis = (VirtualBoard*)arg;
+
+  // Create control interface endpoint
+  RTcomm ctrl_if;
+  int opcode = 0;
+  size_t ctrl_size = 0;
 
   // Now we can search for agents!
   AgentMsg packet;
@@ -316,14 +304,15 @@ void VirtualBoard::control_task(void *arg) {
 
     // Wait for a packet on the queue
     packet.clear();
-    if(pthis->recv_command(packet)) {
-      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive a command from the queue.");
+    ctrl_size = packet.maxsize();
+    if(ctrl_if.recv(opcode, packet.get_buffer(), ctrl_size)) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive a command from main thread.");
       // Terminate server
       terminate_interrupt = true;
       return;
     }
 
-    // If the packet is start
+    // Check packet
     packet.decode();
     if(packet.type() != ATMD_CMD_MEAS_SET && packet.type() != ATMD_CMD_MEAS_CTR) {
       // Wrong packet type, ignore.
@@ -408,7 +397,7 @@ void VirtualBoard::control_task(void *arg) {
           packet.type(ATMD_CMD_ERROR);
           packet.encode();
           // Send packet
-          if(pthis->send_command(packet)) {
+          if(ctrl_if.reply(ATMD_CMD_ERROR, packet.get_buffer(), packet.size())) {
             rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
             // Terminate server
             terminate_interrupt = true;
@@ -422,7 +411,8 @@ void VirtualBoard::control_task(void *arg) {
 
           // Send blank bad packet
           packet.clear();
-          if(pthis->send_command(packet)) {
+          if(ctrl_if.reply(ATMD_CMD_BADTYPE, packet.get_buffer(), packet.size())) {
+            // TODO: here it might break...
             rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
             // Terminate server
             terminate_interrupt = true;
@@ -447,7 +437,7 @@ void VirtualBoard::control_task(void *arg) {
             packet.type(ATMD_CMD_BUSY);
             packet.encode();
             // Send packet
-            if(pthis->send_command(packet)) {
+            if(ctrl_if.reply(ATMD_CMD_BUSY, packet.get_buffer(), packet.size())) {
               rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
               // Terminate server
               terminate_interrupt = true;
@@ -461,7 +451,7 @@ void VirtualBoard::control_task(void *arg) {
 
             // Send blank bad packet
             packet.clear();
-            if(pthis->send_command(packet)) {
+            if(ctrl_if.reply(ATMD_CMD_BADTYPE, packet.get_buffer(), packet.size())) {
               rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
               // Terminate server
               terminate_interrupt = true;
@@ -479,7 +469,7 @@ void VirtualBoard::control_task(void *arg) {
           packet.type(ATMD_CMD_ACK);
           packet.encode();
           // Send packet
-          if(pthis->send_command(packet)) {
+          if(ctrl_if.reply(ATMD_CMD_ACK, packet.get_buffer(), packet.size())) {
             rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
             // Terminate server
             terminate_interrupt = true;
@@ -516,7 +506,7 @@ void VirtualBoard::control_task(void *arg) {
         // Check agent address
         if(memcmp(&remote_addr, pthis->get_agent(agent).agent_addr(), sizeof(struct ether_addr)) == 0) {
           // Good agent, pass answer to non-RT side
-          if(pthis->send_command(packet)) {
+          if(ctrl_if.reply(packet.type(), packet.get_buffer(), packet.size())) {
             rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
             // Terminate server
             terminate_interrupt = true;
@@ -981,6 +971,9 @@ void VirtualBoard::clear_config() {
   // Save format
   _format = ATMD_FORMAT_MATPS3;
 
+  // Reset board status
+  _status = ATMD_STATUS_IDLE;
+
 }
 
 
@@ -1396,6 +1389,7 @@ int VirtualBoard::start_measure() {
     return -1;
 
   AgentMsg packet;
+  int opcode = 0;
 
   // Set status
   _status = ATMD_STATUS_RUNNING;
@@ -1435,23 +1429,18 @@ int VirtualBoard::start_measure() {
     packet.refclk(_refclk);
     packet.hsdiv(_hsdiv);
 
+    // Encode packet
+    packet.encode();
+
     // Send configuration packet
-    if(send_command(packet)) {
+    if(send_command(opcode, packet)) {
       syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
       // Terminate server
       terminate_interrupt = true;
       return -1;
     }
 
-    // Wait for answer
-    packet.clear();
-    if(recv_command(packet)) {
-      syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to receive a command to the queue.");
-      // Terminate server
-      terminate_interrupt = true;
-      return -1;
-    }
-
+    // Check answer
     packet.decode();
     if(packet.type() == ATMD_CMD_ERROR) {
       syslog(ATMD_ERR, "VirtualBoard [start_measure]: error sending configuration to agent with address '%s'.", ether_ntoa(get_agent(i).agent_addr()));
@@ -1461,6 +1450,11 @@ int VirtualBoard::start_measure() {
       syslog(ATMD_ERR, "VirtualBoard [start_measure]: agent with address '%s' was busy while sending configuration.", ether_ntoa(get_agent(i).agent_addr()));
       _status = ATMD_STATUS_ERR;
       return -1;
+    } else {
+#ifdef DEBUG
+      if(enable_debug)
+        syslog(ATMD_DEBUG, "VirtualBoard [start_measure]: agent with address '%s' was correctly configured.", ether_ntoa(get_agent(i).agent_addr()));
+#endif
     }
   }
 
@@ -1468,22 +1462,15 @@ int VirtualBoard::start_measure() {
   packet.clear();
   packet.type(ATMD_CMD_MEAS_CTR);
   packet.action(ATMD_ACTION_START);
-  if(send_command(packet)) {
+  packet.encode();
+  if(send_command(opcode, packet)) {
     syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
     // Terminate server
     terminate_interrupt = true;
     return -1;
   }
 
-  // Wait for answer
-  packet.clear();
-  if(recv_command(packet)) {
-    syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to receive a command to the queue.");
-    // Terminate server
-    terminate_interrupt = true;
-    return -1;
-  }
-
+  // Check answer
   packet.decode();
   if(packet.type() == ATMD_CMD_ACK)
     return 0;
@@ -1515,27 +1502,20 @@ int VirtualBoard::stop_measure() {
     return -1;
 
   AgentMsg packet;
+  int opcode = 0;
 
   // Start measure with a broadcast
   packet.clear();
   packet.type(ATMD_CMD_MEAS_CTR);
   packet.action(ATMD_ACTION_STOP);
-  if(send_command(packet)) {
+  if(send_command(opcode, packet)) {
     syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
     // Terminate server
     terminate_interrupt = true;
     return -1;
   }
 
-  // Wait for answer
-  packet.clear();
-  if(recv_command(packet)) {
-    syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to receive a command to the queue.");
-    // Terminate server
-    terminate_interrupt = true;
-    return -1;
-  }
-
+  // Check answer
   packet.decode();
   if(packet.type() == ATMD_CMD_ACK)
     return 0;

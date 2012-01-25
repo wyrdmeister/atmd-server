@@ -44,6 +44,7 @@
 #include "atmd_timings.h"
 #include "atmd_measure.h"
 #include "atmd_rtqueue.h"
+#include "atmd_rtcomm.h"
 #include "MatFile.h"
 
 
@@ -235,14 +236,13 @@ public:
   void status(int val) { _status = val; };
   int status()const { return _status; };
 
-  // Manage command queue
-  int recv_command(GenMsg& packet);
-  int send_command(const GenMsg& packet);
-
   // Autosave counter
   void reset_counter() { _auto_counter = 0; };
   size_t get_counter()const { return _auto_counter; };
   void increment_counter() { _auto_counter++; };
+
+  // Send command to control_task
+  int send_command(int& opcode, GenMsg& msg);
 
   // Get data queue;
   RTqueue& data_queue() { return _data_queue; };
@@ -258,8 +258,8 @@ private:
   // Control RT socket
   RTnet _ctrl_sock;
 
-  // Control queue
-  RTqueue _ctrl_queue;
+  // Control interface
+  RTcomm _ctrl_if;
 
   // Handle of the RT data task
   RT_TASK _rt_data_task;

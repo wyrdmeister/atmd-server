@@ -63,6 +63,13 @@ void atmd_measure(void *arg) {
     }
   }
 
+  // Create control endpoint
+  RTcomm ctrl_if;
+  int opcode = 0;
+  size_t ctrl_size = 0;
+  MeasureDef meas_info;
+  AgentMsg ctrl_packet;
+
   // Create structure to hold start data
   EventData events(&heap);
   try {
@@ -95,38 +102,50 @@ void atmd_measure(void *arg) {
       break;
 
     // Put thread to sleep, waiting for a start command
-    retval = rt_task_suspend(NULL);
-    if(retval) {
-      switch(retval) {
-        case -EINTR: // Received a signal
-          // TODO: error handling / termination (?)
-          return;
+    ctrl_size = sizeof(meas_info);
+    if(ctrl_if.recv(opcode, &meas_info, ctrl_size)) {
+      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to receive info from control queue.");
+      // Terminate server
+      terminate_interrupt = true;
+      return;
+    }
 
-        case -EPERM: // Invalid context
-          rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_task_suspend called from an invalid context.");
-          return;
-
-        default:
-          rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_task_suspend failed with unexpected error code (%d).", retval);
-          return;
+    if(opcode != ATMD_ACTION_START) {
+      // Error
+      sys->board->status(ATMD_STATUS_ERR);
+      ctrl_packet.clear();
+      ctrl_packet.type(ATMD_CMD_ERROR);
+      ctrl_packet.encode();
+      if(ctrl_if.reply(ATMD_CMD_ERROR, ctrl_packet.get_buffer(), ctrl_packet.size())) {
+        rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to reply to control command.");
+        // Terminate server
+        terminate_interrupt = true;
+        return;
       }
+      continue;
     }
 
     // Starting measure
     sys->board->status(ATMD_STATUS_RUNNING);
 
-    // Read configuration from message queue
-    MeasureDef meas_info;
-    size_t meas_size = sizeof(meas_info);
-    if(sys->queue->recv(reinterpret_cast<char*>(&meas_info), meas_size)) {
-      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to receive packet from control queue.");
+    // Send ACK
+    ctrl_packet.clear();
+    ctrl_packet.type(ATMD_CMD_ACK);
+    ctrl_packet.encode();
+    if(ctrl_if.reply(ATMD_CMD_ACK, ctrl_packet.get_buffer(), ctrl_packet.size())) {
+      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to reply to control command.");
       // Terminate server
       terminate_interrupt = true;
       return;
     }
 
     // Synchronization to TDMA (wait 10 cycles from master sync)
-    sys->sock->wait_tdma(meas_info.tdma_cycle() + 10);
+    if(sys->sock->wait_tdma(meas_info.tdma_cycle() + 10) == 0) {
+      // Sync error
+      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: error during sync to TDMA.");
+      sys->board->status(ATMD_STATUS_ERR);
+      continue;
+    }
 
     // Start measure cycle
     RTIME measure_start = rt_timer_read();

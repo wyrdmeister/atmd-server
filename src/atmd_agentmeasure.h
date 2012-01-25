@@ -39,7 +39,7 @@
 #include "atmd_rtnet.h"
 #include "atmd_hardware.h"
 #include "atmd_netagent.h"
-#include "atmd_rtqueue.h"
+#include "atmd_rtcomm.h"
 
 // Defines
 #define ATMD_BLOCK 512 // Size of a data block
@@ -53,9 +53,6 @@ public:
 
   // Heap name
   const char* heap_name;
-
-  // Queue name
-  RTqueue* queue;
 
   // Board
   ATMDboard *board;

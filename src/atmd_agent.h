@@ -49,6 +49,6 @@
 #include "atmd_hardware.h"
 #include "atmd_agentmeasure.h"
 #include "atmd_config.h"
-#include "atmd_rtqueue.h"
+#include "atmd_rtcomm.h"
 
 #endif
