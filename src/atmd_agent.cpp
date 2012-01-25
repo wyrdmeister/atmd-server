@@ -329,15 +329,23 @@ int main(int argc, char * const argv[]) {
       exit(0);
     }
 
+    memset(&master_addr, 0, sizeof(struct ether_addr));
     if(ctrl_sock.recv(ctrl_packet, &master_addr)) {
       rt_syslog(ATMD_CRIT, "Failed to receive a packet waiting for master broadcast. Terminating.");
       exit(-1);
     }
 
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "Received packet from '%s'.", ether_ntoa(&master_addr));
+#endif
+
     // Check master broadcast
-    if(ctrl_packet.decode())
+    if(ctrl_packet.decode()) {
       // Bad packet
+      rt_syslog(ATMD_WARN, "Received packet that failed to decode.");
       continue;
+    }
 
     if(ctrl_packet.type() != ATMD_CMD_BRD)
       // Not a broadcast
@@ -347,6 +355,10 @@ int main(int argc, char * const argv[]) {
       rt_syslog(ATMD_WARN, "Received a broadcast start message from an ATMD server with wrong version (%s != %s).", ctrl_packet.version(), VERSION);
       continue;
     } else {
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Received broadcast from master with address '%s'.", ether_ntoa(&master_addr));
+#endif
       break;
     }
 
@@ -365,6 +377,11 @@ int main(int argc, char * const argv[]) {
     exit(-1);
   }
 
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Answered to master.");
+#endif
+
   // Create data socket
   RTnet data_sock;
   data_sock.interface(server_conf.rtif());
@@ -375,6 +392,11 @@ int main(int argc, char * const argv[]) {
     ctrl_sock.close();
     exit(-1);
   }
+
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Successfully created RT data socket.");
+#endif
 
   // Create RT_HEAP
   RT_HEAP data_heap;
@@ -410,6 +432,11 @@ int main(int argc, char * const argv[]) {
     exit(-1);
   }
 
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Successfully created RT heap.");
+#endif
+
   // Create RT_QUEUE
   RTqueue ctrl_queue;
   if(ctrl_queue.init(ATMD_RT_CTRL_QUEUE, 200000)) {
@@ -418,6 +445,11 @@ int main(int argc, char * const argv[]) {
     data_sock.close();
     exit(-1);
   }
+
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Successfully created RT control queue.");
+#endif
 
   // Init thread params
   InitData th_info;
@@ -452,6 +484,11 @@ int main(int argc, char * const argv[]) {
     data_sock.close();
     exit(-1);
   }
+
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Successfully spawned RT data task.");
+#endif
 
   // Remote address
   struct ether_addr remote_addr;
