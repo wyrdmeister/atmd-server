@@ -305,14 +305,23 @@ int main(int argc, char * const argv[])
 
   // Now we initialize network interface
   Network netif;
+  netif.set_address(ip_address);
+  netif.set_port(listen_port);
   try {
-    netif.set_address(ip_address);
-    netif.set_port(listen_port);
     netif.init();
 
   } catch (int e) {
-    // TODO: handle errors
-    exit(e);
+    switch(e) {
+      case ATMD_ERR_SOCK:
+        syslog(ATMD_ERR, "Failed to initialize Network. Socket error.");
+        break;
+      case ATMD_ERR_LISTEN:
+        syslog(ATMD_ERR, "Failed to initialize Network. Listen error.");
+        break;
+      default:
+        break;
+    }
+    exit(-1);
   }
 
   // Define the time for which the main cycle sleep between subsequent calls to get_command

@@ -62,7 +62,7 @@ int RTnet::init(bool en_bind) {
 #endif
 
   // Extend the socket pool
-  retval = rt_dev_ioctl(_sock, RTNET_RTIOC_EXTPOOL, _rtskbs);
+  retval = rt_dev_ioctl(_sock, RTNET_RTIOC_EXTPOOL, &_rtskbs);
   if (retval != (int)_rtskbs) {
     rt_syslog(ATMD_ERR, "RTnet [init]: rt_dev_ioctl(RT_IOC_SO_EXTPOOL) failed. Error: '%s'\n", strerror(-retval));
     rt_dev_close(_sock);
