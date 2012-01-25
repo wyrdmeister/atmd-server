@@ -242,6 +242,10 @@ void VirtualBoard::control_task(void *arg) {
     terminate_interrupt = true;
     return;
   }
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully create RTnet control socket.");
+#endif
 
   // Now we can search for agents!
   AgentMsg packet;
@@ -265,6 +269,11 @@ void VirtualBoard::control_task(void *arg) {
     return;
   }
 
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully send broadcast packet to agents.");
+#endif
+
   // Then wait for responses
   size_t ag_count = 0;
   struct ether_addr remote_addr;
@@ -282,23 +291,22 @@ void VirtualBoard::control_task(void *arg) {
       return;
     }
 
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: received answer from agent with address '%s'.", ether_ntoa(&remote_addr));
+#endif
+
     // Check type and version
     packet.decode();
     if(packet.type() != ATMD_CMD_HELLO) {
       // Packet is not an answer, ignore
-#ifdef DEBUG
-      if(enable_debug)
-        rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: received an unexpected packet with type (%d).", packet.type());
-#endif
+      rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: received an unexpected packet with type (%d).", packet.type());
       continue;
     }
 
     if(strncmp(packet.version(), VERSION, ATMD_VER_LEN) != 0) {
       // Packet has wrong version
-#ifdef DEBUG
-      if(enable_debug)
-        rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: received HELLO packet with wrong version number (it was '%s' instead of '%s').", packet.version(), VERSION);
-#endif
+      rt_syslog(ATMD_ERR, "VirtualBoard [control_task]: received HELLO packet with wrong version number (it was '%s' instead of '%s').", packet.version(), VERSION);
       continue;
     }
 
@@ -308,8 +316,10 @@ void VirtualBoard::control_task(void *arg) {
 
         // Found! Now compare address with those already received
         for(size_t j = 0; j < pthis->agents(); j++) {
-          if(memcmp(&remote_addr, pthis->get_agent(j).agent_addr(), sizeof(struct ether_addr)) == 0)
+          if(memcmp(&remote_addr, pthis->get_agent(j).agent_addr(), sizeof(struct ether_addr)) == 0) {
+            rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: received a duplicate answer from a agent with address '%s'.", ether_ntoa(&remote_addr));
             goto ignore;
+          }
         }
         // Add agent
         pthis->add_agent(i, &remote_addr);
@@ -335,8 +345,7 @@ void VirtualBoard::control_task(void *arg) {
     try {
       pthis->recv_command(packet);
     } catch(int e) {
-      // TODO: handle unblock
-      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive a command from the queue.");
+      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive a command from the queue (Error: %d).", e);
       // Terminate server
       terminate_interrupt = true;
       return;
@@ -370,6 +379,11 @@ void VirtualBoard::control_task(void *arg) {
         terminate_interrupt = true;
         return;
       }
+
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully sent broadcast control packet (Action: %d).", packet.action());
+#endif
 
       // Wait for acknowledge from all agents
       ag_count = 0;
@@ -418,7 +432,12 @@ void VirtualBoard::control_task(void *arg) {
 
       if(count_bad != 0) {
         if(count_bad == agent_answers.size()) {
-          // All error. Build packet
+          // All error
+#ifdef DEBUG
+          if(enable_debug)
+            rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: command failed because agents had ERRORs.");
+#endif
+          // Build packet
           packet.clear();
           packet.type(ATMD_CMD_ERROR);
           packet.encode();
@@ -456,7 +475,12 @@ void VirtualBoard::control_task(void *arg) {
             count_bad++;
         if(count_bad != 0) {
           if(count_bad == agent_answers.size()) {
-            // All busy. Build packet
+            // All busy.
+#ifdef DEBUG
+            if(enable_debug)
+              rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: command failed because agents were BUSY.");
+#endif
+            // Build packet
             packet.clear();
             packet.type(ATMD_CMD_BUSY);
             packet.encode();
@@ -489,6 +513,10 @@ void VirtualBoard::control_task(void *arg) {
 
         } else {
           // Everything ok!
+#ifdef DEBUG
+          if(enable_debug)
+            rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: got positive answer from all agents.");
+#endif
           packet.clear();
           packet.type(ATMD_CMD_ACK);
           packet.encode();
