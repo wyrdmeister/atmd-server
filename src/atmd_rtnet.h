@@ -54,7 +54,7 @@
  */
 class RTnet {
 public:
-  RTnet() : _sock(-1), _rtskbs(ATMD_DEF_RTSKBS), _protocol(ATMD_PROTO_NONE) { memset(_ifname, 0, IFNAMSIZ); };
+  RTnet() : _sock(-1), _if_id(0), _rtskbs(ATMD_DEF_RTSKBS), _protocol(ATMD_PROTO_NONE) { memset(_ifname, 0, IFNAMSIZ); };
   ~RTnet() { if(_sock >= 0) rt_dev_close(_sock); };
 
   // Configure RTSKBS
@@ -90,6 +90,9 @@ public:
 private:
   // Socket
   int _sock;
+
+  // Interface ID
+  int _if_id;
 
   // Number of SKBS
   unsigned int _rtskbs;

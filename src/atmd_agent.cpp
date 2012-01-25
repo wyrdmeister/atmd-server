@@ -367,6 +367,7 @@ int main(int argc, char * const argv[]) {
 
   // Create data socket
   RTnet data_sock;
+  data_sock.interface(server_conf.rtif());
   data_sock.protocol(ATMD_PROTO_DATA);
   data_sock.rtskbs(server_conf.rtskbs());
   if(data_sock.init()) {
@@ -537,7 +538,9 @@ int main(int argc, char * const argv[]) {
               measure_info.tdma_cycle(ctrl_packet.tdma_cycle());
               if(ctrl_queue.send(reinterpret_cast<const char*>(&measure_info), sizeof(measure_info))) {
                 rt_syslog(ATMD_CRIT, "Failed to send message to the control queue.");
-                // TODO: add cleanup!
+                // TODO: add cleanup of RT tasks!
+                ctrl_sock.close();
+                data_sock.close();
                 exit(-1);
               }
 
@@ -560,9 +563,15 @@ int main(int argc, char * const argv[]) {
                   case -EINVAL:
                   case -EIDRM:
                     rt_syslog(ATMD_CRIT, "rt_task_resume(): failed. Invalid task descriptor.");
+                    // TODO: add cleanup of RT tasks
+                    ctrl_sock.close();
+                    data_sock.close();
                     exit(-1);
                   default:
                     rt_syslog(ATMD_CRIT, "rt_task_resume(): failed with unexpected return value (%d).", retval);
+                    // TODO: add cleanup of RT tasks
+                    ctrl_sock.close();
+                    data_sock.close();
                     exit(-1);
                 }
               }
@@ -605,6 +614,13 @@ int main(int argc, char * const argv[]) {
         break;
     }
   }
+
+  // Close sockets
+  ctrl_sock.close();
+  data_sock.close();
+
+  // Unsuspend measurement thread
+  rt_task_notify(&meas_th, SIGHUP);
 
   // Wait on measurement thread termination
   rt_task_join(&meas_th);

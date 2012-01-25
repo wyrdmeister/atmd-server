@@ -77,7 +77,12 @@ class VirtualBoard {
 public:
   // Constructor and destructor
   VirtualBoard(AtmdConfig &obj) : _config(obj) { clear_config(); };
-  ~VirtualBoard() { curl_easy_cleanup(this->easy_handle); }; // TODO: destructor should join threads...
+  ~VirtualBoard() {
+    _ctrl_sock.close();
+    _data_sock.close();
+    curl_easy_cleanup(this->easy_handle);
+    // TODO: task cleanup!
+  };
 
   // Start all the relevant RT tasks and sends broadcasts to find agents
   int init();

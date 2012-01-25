@@ -72,24 +72,26 @@ int RTnet::init(bool en_bind) {
     rt_syslog(ATMD_DEBUG, "RTnet [init]: successfully extended RT socket pool to %d SKBS.\n", _rtskbs);
 #endif
 
-  // If bind is enabled...
-  if(en_bind) {
-
-    // Find interface ID
-    struct ifreq ifr;
-    strncpy(ifr.ifr_name, _ifname, IFNAMSIZ);
-    retval = rt_dev_ioctl(_sock, SIOCGIFINDEX, &ifr);
-    if(retval < 0) {
-      rt_syslog(ATMD_ERR, "RTnet [init]: cannot identify interface '%s'. Error: '%s'.", _ifname, strerror(-retval));
-      rt_dev_close(_sock);
-      _sock = -1;
-      return -1;
-    }
+  // Find interface ID
+  struct ifreq ifr;
+  strncpy(ifr.ifr_name, _ifname, IFNAMSIZ);
+  retval = rt_dev_ioctl(_sock, SIOCGIFINDEX, &ifr);
+  if(retval < 0) {
+    rt_syslog(ATMD_ERR, "RTnet [init]: cannot identify interface '%s'. Error: '%s'.", _ifname, strerror(-retval));
+    rt_dev_close(_sock);
+    _sock = -1;
+    return -1;
+  } else {
+    _if_id = ifr.ifr_ifindex;
+  }
 
 #ifdef DEBUG
   if(enable_debug)
     rt_syslog(ATMD_DEBUG, "RTnet [init]: interface '%s' was found to have ID %d.\n", _ifname, ifr.ifr_ifindex);
 #endif
+
+  // If bind is enabled...
+  if(en_bind) {
 
     // Local address
     struct sockaddr_ll local_addr;
@@ -132,6 +134,8 @@ int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
   memset(&remote_addr, 0, sizeof(struct sockaddr_ll));
   remote_addr.sll_family = AF_PACKET;
   remote_addr.sll_protocol = _protocol;
+  remote_addr.sll_ifindex = _if_id;
+  remote_addr.sll_halen = sizeof(struct ether_addr);
   memcpy(&remote_addr.sll_addr, addr, sizeof(struct ether_addr));
 
   // Send message

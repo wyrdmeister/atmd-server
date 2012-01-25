@@ -36,27 +36,27 @@ int RTqueue::init(const char * name, size_t pool) {
   if(retval) {
     switch(retval) {
       case -ENOMEM:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_queue_create() failed. Not enough memory available.");
+        rt_syslog(ATMD_CRIT, "RTqueue [init]: rt_queue_create() failed. Not enough memory available.");
         break;
 
       case -EEXIST:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_queue_create() failed. The given name is already in use.");
+        rt_syslog(ATMD_CRIT, "RTqueue [init]: rt_queue_create() failed. The given name is already in use.");
         break;
 
       case -EPERM:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_queue_create() failed. Called from invalid context.");
+        rt_syslog(ATMD_CRIT, "RTqueue [init]: rt_queue_create() failed. Called from invalid context.");
         break;
 
       case -EINVAL:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_queue_create() failed. Invalid parameter.");
+        rt_syslog(ATMD_CRIT, "RTqueue [init]: rt_queue_create() failed. Invalid parameter.");
         break;
 
       case -ENOENT:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_queue_create() failed. Cannot open /dev/rtheap.");
+        rt_syslog(ATMD_CRIT, "RTqueue [init]: rt_queue_create() failed. Cannot open /dev/rtheap.");
         break;
 
       default:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_queue_create() failed with an unexpected error (%d).", retval);
+        rt_syslog(ATMD_CRIT, "RTqueue [init]: rt_queue_create() failed with an unexpected error (%d).", retval);
         break;
     }
     return -1;

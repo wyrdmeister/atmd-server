@@ -37,6 +37,9 @@ int VirtualBoard::init() {
 
   int retval = 0;
 
+  // Auto init RT print services
+  rt_print_auto_init(1);
+
   // Init libCURL
   if((this->easy_handle = curl_easy_init()) == NULL) {
     syslog(ATMD_INFO, "Board init: failed to initialize libcurl.");
@@ -79,6 +82,32 @@ int VirtualBoard::init() {
     syslog(ATMD_CRIT, "VirtualBoard [init]: failed to initialize RT data queue.");
     return -1;
   }
+
+  // Init the RT control socket
+  _ctrl_sock.rtskbs(_config.rtskbs());
+  _ctrl_sock().protocol(ATMD_PROTO_CTRL);
+  _ctrl_sock().interface(_config.rtif());
+  if(_ctrl_sock().init(true)) {
+    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet control socket.");
+    return -1;
+  }
+#ifdef DEBUG
+  if(enable_debug)
+    syslog(ATMD_DEBUG, "VirtualBoard [init]: successfully create RTnet control socket.");
+#endif
+
+  // Init the RT data socket
+  _data_sock.rtskbs(_config.rtskbs());
+  _data_sock.protocol(ATMD_PROTO_DATA);
+  _data_sock.interface(_config.rtif());
+  if(_data_sock.init(true)) {
+    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet data socket.");
+    return -1;
+  }
+#ifdef DEBUG
+  if(enable_debug)
+    syslog(ATMD_DEBUG, "VirtualBoard [init]: successfully create RTnet data socket.");
+#endif
 
   // The first thing to do is to start the control RT thread
   retval = rt_task_spawn(&_ctrl_task, ATMD_RT_CTRL_TASK, 0, 75, T_FPU|T_JOINABLE, VirtualBoard::control_task, (void*)this);
@@ -198,22 +227,6 @@ void VirtualBoard::control_task(void *arg) {
 
   // Cast back 'this' pointer
   VirtualBoard * pthis = (VirtualBoard*)arg;
-
-  // Create real-time network control socket
-  pthis->ctrl_sock().rtskbs(pthis->config().rtskbs());
-  pthis->ctrl_sock().protocol(ATMD_PROTO_CTRL);
-  pthis->ctrl_sock().interface(pthis->config().rtif());
-  if(pthis->ctrl_sock().init(true)) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to init RTnet socket.");
-
-    // Terminate server
-    terminate_interrupt = true;
-    return;
-  }
-#ifdef DEBUG
-  if(enable_debug)
-    rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully create RTnet control socket.");
-#endif
 
   // Now we can search for agents!
   AgentMsg packet;
@@ -531,18 +544,6 @@ void VirtualBoard::rt_data_task(void *arg) {
 
   // Cast back the 'this' pointer
   VirtualBoard* pthis = (VirtualBoard*)arg;
-
-  // Create data socket
-  pthis->data_sock().rtskbs(pthis->config().rtskbs());
-  pthis->data_sock().interface(pthis->config().rtif());
-  pthis->data_sock().protocol(ATMD_PROTO_DATA);
-  if(pthis->data_sock().init(true)) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: failed to init RTnet socket.");
-
-    // Terminate server
-    terminate_interrupt = true;
-    return;
-  }
 
   // Cycle waiting for data
   DataMsg packet;
