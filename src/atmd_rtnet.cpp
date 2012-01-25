@@ -166,11 +166,12 @@ int RTnet::recv(GenMsg& packet, struct ether_addr* addr)const {
   if(retval < 0) {
     rt_syslog(ATMD_ERR, "RTnet [recv]: failed to receive packet. Error: '%s'.", strerror(-retval));
     return -1;
+
   } else {
 
 #ifdef DEBUG
     if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "RTnet [recv]: received packet with size %d from address '%s'.", ether_ntoa((struct ether_addr*)&(remote_addr.sll_addr)));
+      rt_syslog(ATMD_DEBUG, "RTnet [recv]: received packet with size %d from address '%s'.", retval, ether_ntoa((struct ether_addr*)&(remote_addr.sll_addr)));
 #endif
 
     // Copy remote addr
