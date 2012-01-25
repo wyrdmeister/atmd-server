@@ -1,0 +1,73 @@
+#!/bin/bash
+# RTNET custom startup script
+# Configuration for Master
+
+IP="10.0.0.1"
+NETMASK="255.255.255.0"
+SLAVE_IP=("10.0.0.100" "10.0.0.200")
+SLAVE_MAC=("00:1B:21:D3:07:5F" "00:1B:21:D3:08:4F")
+
+PREFIX="/usr/local/rtnet"
+TDMACFG="${PREFIX}/sbin/tdmacfg"
+RTIFCONFIG="${PREFIX}/sbin/rtifconfig"
+EN_CAP="no"
+
+NETDRV="e1000e"
+
+
+init_rtnet() {
+  if [ "`lsmod | grep $NETDRV`" != "" ]; then
+    echo " = Remove network modules..."
+    modprobe -r $NETDRV
+  fi
+  echo " = Loading modules..."
+  insmod $PREFIX/modules/rtnet.ko || exit 1
+  insmod $PREFIX/modules/rtipv4.ko || exit 1
+  insmod $PREFIX/modules/rt_$NETDRV.ko || exit 1
+  insmod $PREFIX/modules/rtudp.ko || exit 1
+  insmod $PREFIX/modules/rtpacket.ko || exit 1
+
+  if [ $EN_CAP = "yes" ]; then
+    insmod $PREFIX/modules/rtcap.ko || exit 1
+    ifconfig rteth0 up
+    ifconfig rteth0-mac up
+  fi
+
+  # Bring rteth0 up before loading TDMA
+  echo " = Bringing rteth0 up..."
+  rtifconfig rteth0 up $IP netmask $NETMASK
+
+  sleep 10
+
+  echo " = Loading TDMA modules..."
+  insmod $PREFIX/modules/rtmac.ko
+  insmod $PREFIX/modules/tdma.ko
+}
+
+
+case "$1" in
+  start)
+    init_rtnet
+    echo " = Adding routes..."
+    for i in  $(seq 0 $((${#SLAVE_IP[@]} - 1)))
+    do
+      rtroute add ${SLAVE_IP[$i]} ${SLAVE_MAC[$i]} dev rteth0
+    done
+    echo " = Configure TDMA as master..."
+    tdmacfg rteth0 master 5000 -i 32
+    echo " = Configure TDMA slots..."
+    tdmacfg rteth0 slot 0 0 -p 1/1 -s 1500 -t 1000000000
+    tdmacfg rteth0 slot 1 2500 -p 1/1 -j 0 -s 1500 -t 1000000000
+    echo " = Configuration done."
+    ;;
+
+  stop)
+    ifconfig rteth0 down 2>/dev/null
+    ifconfig rteth0-mac down 2>/dev/null
+    rtifconfig rteth0 down 2>/dev/null
+    rmmod tdma rtmac rtcap rt_$NETDRV rtpacket rtudp rtipv4 rtnet 2>/dev/null
+    ;;
+
+  *)
+    echo "Wrong command!"
+esac
