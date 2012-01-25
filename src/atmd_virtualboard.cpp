@@ -87,7 +87,7 @@ int VirtualBoard::init() {
   _ctrl_sock.rtskbs(_config.rtskbs());
   _ctrl_sock.protocol(ATMD_PROTO_CTRL);
   _ctrl_sock.interface(_config.rtif());
-  if(_ctrl_sock().init(true)) {
+  if(_ctrl_sock.init(true)) {
     syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet control socket.");
     return -1;
   }
