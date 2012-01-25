@@ -55,7 +55,7 @@ int AgentMsg::decode() {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: %s argument has wrong type.", (_type == ATMD_CMD_BRD) ? "ATMD_CMD_BRD" : "ATMD_CMD_HELLO");
         return -1;
       }
-      strncpy((char*)(_buffer+offset), _version, ATMD_VER_LEN);
+      strncpy(_version, (char*)(_buffer+offset), ATMD_VER_LEN);
       _version[ATMD_VER_LEN-1] = '\0';
       break;
 
@@ -239,7 +239,7 @@ int AgentMsg::encode() {
       *(_buffer+offset) = ATMD_TYPE_STR;
       offset++;
       strncpy((char*)(_buffer+offset), _version, ATMD_VER_LEN);
-      offset += strlen(_version);
+      offset += strlen(_version)+1;
       break;
 
     case ATMD_CMD_MEAS_SET:

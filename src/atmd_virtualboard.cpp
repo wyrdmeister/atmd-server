@@ -248,7 +248,7 @@ void VirtualBoard::control_task(void *arg) {
 
 #ifdef DEBUG
     if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully send broadcast packet to agents.");
+      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully sent broadcast packet to agents.");
 #endif
 
   // Then wait for responses
