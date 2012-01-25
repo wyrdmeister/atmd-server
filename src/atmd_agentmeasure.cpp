@@ -63,29 +63,6 @@ void atmd_measure(void *arg) {
     }
   }
 
-  // Bind to message queue
-  RT_QUEUE queue;
-  retval = rt_queue_bind(&queue, sys->queue_name, TM_NONBLOCK);
-  if(retval) {
-    switch(retval) {
-      case -EFAULT: // Invalid memory
-        rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_bind() failed. Invalid memory reference.");
-        return;
-
-      case -EWOULDBLOCK: // Object not registered
-        rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_bind() failed. Object named '%s' is not registered.", sys->queue_name);
-        return;
-
-      case -ENOENT: // /dev/rtheap not present
-        rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_bind() failed. /dev/rtheap not present.");
-        return;
-
-      default:
-        rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_bind() failed with unexpected return value (%d).", retval);
-        return;
-    }
-  }
-
   // Create structure to hold start data
   EventData events(&heap);
   try {
@@ -139,58 +116,29 @@ void atmd_measure(void *arg) {
     sys->board->status(ATMD_STATUS_RUNNING);
 
     // Read configuration from message queue
-    MeasureDef *meas_info = NULL;
-    retval = rt_queue_receive(&queue, (void**)&meas_info, 1000000000); // 1sec timeout
-    if(retval < 0) {
-      switch(retval) {
-        case -EINVAL:
-        case -EIDRM:
-          rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_receive failed. Invalid queue descriptor. Terminating.");
-          // Terminate server
-          terminate_interrupt = true;
-          return;
-
-        case -ETIMEDOUT:
-          rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_receive failed because timeout was reached. Aborting measure.");
-          sys->board->status(ATMD_STATUS_ERR);
-          break;
-
-        case -EINTR:
-          rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_receive failed. rt_task_unblock() has been called. Aborting measure.");
-          sys->board->status(ATMD_STATUS_ERR);
-          break;
-
-        default:
-          rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_receive failed with an unexpected return value (%d).", retval);
-          // Terminate server
-          terminate_interrupt = true;
-          return;
-      }
-
-      // Try again!
-      continue;
-
-    } else if(retval != sizeof(MeasureDef)) {
-      // The message received is incomplete
-      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: rt_queue_receive received an incomplete message. Aborting measure.");
-      rt_queue_free(&queue, (void*)meas_info);
-      continue;
+    MeasureDef meas_info;
+    size_t meas_size = sizeof(meas_info);
+    if(sys->queue->recv(reinterpret_cast<char*>(&meas_info), meas_size)) {
+      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to receive packet from control queue.");
+      // Terminate server
+      terminate_interrupt = true;
+      return;
     }
 
     // Synchronization to TDMA (wait 10 cycles from master sync)
-    sys->sock->wait_tdma(meas_info->tdma_cycle() + 10);
+    sys->sock->wait_tdma(meas_info.tdma_cycle() + 10);
 
     // Start measure cycle
     RTIME measure_start = rt_timer_read();
     RTIME measure_end = measure_start;
     uint32_t index = 0;
-    while( (measure_end - measure_start) < (meas_info->measure_time() - meas_info->window_time()) ) {
+    while( (measure_end - measure_start) < (meas_info.measure_time() - meas_info.window_time()) ) {
 
       // Clear event structure
       events.clear();
 
       // Call measure function
-      retval = atmd_get_start(sys->board, meas_info->window_time(), meas_info->timeout(), events);
+      retval = atmd_get_start(sys->board, meas_info.window_time(), meas_info.timeout(), events);
       if(retval) {
         rt_syslog(ATMD_ERR, "Measure [atmd_measure]: failed to get start. Terminating measure.");
         measure_end = rt_timer_read();
@@ -215,7 +163,7 @@ void atmd_measure(void *arg) {
         break;
 
       // Sleep to let RTnet to transfer the data
-      rt_task_sleep(meas_info->deadtime());
+      rt_task_sleep(meas_info.deadtime());
     }
 
     // Send termination packet on the data socket
@@ -230,13 +178,9 @@ void atmd_measure(void *arg) {
       terminate_interrupt = true;
       return;
     }
-
-    // Free message structure
-    rt_queue_free(&queue, (void*)meas_info);
   }
 
   // Cleanup
-  rt_queue_unbind(&queue);
   rt_heap_unbind(&heap);
 }
 

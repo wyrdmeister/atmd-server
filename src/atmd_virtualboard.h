@@ -35,7 +35,6 @@
 
 // Xenomai
 #include <native/task.h>
-#include <native/queue.h>
 #include <native/mutex.h>
 
 // Local
@@ -44,6 +43,7 @@
 #include "atmd_netagent.h"
 #include "atmd_timings.h"
 #include "atmd_measure.h"
+#include "atmd_rtqueue.h"
 #include "MatFile.h"
 
 
@@ -231,13 +231,17 @@ public:
   int status()const { return _status; };
 
   // Manage command queue
-  void recv_command(GenMsg& packet) throw(int);
-  void send_command(const GenMsg& packet) throw(int);
+  int recv_command(GenMsg& packet);
+  int send_command(const GenMsg& packet);
 
   // Autosave counter
   void reset_counter() { _auto_counter = 0; };
   size_t get_counter()const { return _auto_counter; };
   void increment_counter() { _auto_counter++; };
+
+  // Get data queue;
+  RTqueue& data_queue() { return _data_queue; };
+  const RTqueue& data_queue()const { return _data_queue; };
 
 private:
   // Config object reference
@@ -250,13 +254,16 @@ private:
   RTnet _ctrl_sock;
 
   // Control queue
-  RT_QUEUE _ctrl_queue;
+  RTqueue _ctrl_queue;
 
   // Handle of the RT data task
   RT_TASK _rt_data_task;
 
   // Handle of the non-RT data task
   RT_TASK _data_task;
+
+  // Data queue
+  RTqueue _data_queue;
 
   // Vector of DataTask structures
   std::vector<AgentDescriptor> _agents;

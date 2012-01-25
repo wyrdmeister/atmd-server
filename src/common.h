@@ -73,9 +73,11 @@
 #define ATMD_RT_HEAP_NAME   "data_heap"
 #define ATMD_RT_QUEUE_NAME  "ctrl_queue"
 #define ATMD_RT_THREAD_NAME "atmd_measure"
+
 #define ATMD_RT_CTRL_TASK   "ctrl_task"
 #define ATMD_RT_DATA_TASK   "rt_data_task"
 #define ATMD_NRT_DATA_TASK  "data_task"
+#define ATMD_RT_CTRL_QUEUE  "data_queue"
 #define ATMD_RT_DATA_QUEUE  "data_queue"
 #define ATMD_RT_MEAS_MUTEX  "meas_mutex"
 

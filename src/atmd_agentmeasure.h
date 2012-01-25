@@ -31,7 +31,6 @@
 #include <rtdk.h>
 #include <native/task.h>
 #include <native/heap.h>
-#include <native/queue.h>
 #include <native/timer.h>
 
 // Local
@@ -40,6 +39,7 @@
 #include "atmd_rtnet.h"
 #include "atmd_hardware.h"
 #include "atmd_netagent.h"
+#include "atmd_rtqueue.h"
 
 // Defines
 #define ATMD_BLOCK 512 // Size of a data block
@@ -55,7 +55,7 @@ public:
   const char* heap_name;
 
   // Queue name
-  const char* queue_name;
+  RTqueue* queue;
 
   // Board
   ATMDboard *board;

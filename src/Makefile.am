@@ -14,6 +14,7 @@ atmd_server_SOURCES = \
 	atmd_timings.cpp \
 	atmd_network.cpp \
 	atmd_measure.cpp \
+	atmd_rtqueue.cpp \
 	MatFile.cpp
 
 atmd_agent_SOURCES = \
@@ -22,7 +23,8 @@ atmd_agent_SOURCES = \
 	atmd_hardware.cpp \
 	atmd_netagent.cpp \
 	atmd_config.cpp \
-	atmd_rtnet.cpp
+	atmd_rtnet.cpp \
+	atmd_rtqueue.cpp
 
 atmd_server_LDADD = $(LDFLAGS) $(PCI_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(XENO_LIBS)
 atmd_server_CPPFLAGS = $(CPPFLAGS) $(XENO_CFLAGS) $(RTNET_CFLAGS) $(LIBCURL_CPPFLAGS) -DATMD_SERVER

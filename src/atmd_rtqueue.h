@@ -1,7 +1,7 @@
 /*
  * ATMD Server version 3.0
  *
- * ATMD Agent - Main header
+ * ATMD Server - RTqueue class header
  *
  * Copyright (C) Michele Devetta 2012 <michele.devetta@unimi.it>
  *
@@ -19,36 +19,40 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef ATMD_AGENT_MAIN_H
-#define ATMD_AGENT_MAIN_H
+#ifndef ATMD_RTQUEUE_H
+#define ATMD_RTQUEUE_H
 
 // Global
-#include <stdlib.h>
-#include <stdint.h>
-#include <signal.h>
-#include <sys/mman.h>
-#include <execinfo.h>
-#include <string>
-#include <fstream>
-
-#include <pcrecpp.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <netinet/ether.h>
+#include <string.h>
 
 // Xenomai
 #include <rtdk.h>
-#include <native/task.h>
-#include <native/heap.h>
+#include <native/queue.h>
 
 // Local
 #include "common.h"
-#include "atmd_rtnet.h"
-#include "atmd_netagent.h"
-#include "atmd_hardware.h"
-#include "atmd_agentmeasure.h"
-#include "atmd_config.h"
-#include "atmd_rtqueue.h"
+
+
+/* @class RTqueue
+ *
+ */
+class RTqueue {
+public:
+  RTqueue() {};
+  ~RTqueue() { rt_queue_delete(&_descriptor); };
+
+  // Create queue
+  int init(const char * name, size_t pool = 1000000);
+
+  // Send message to queue
+  int send(const char * buffer, size_t buff_size);
+
+  // Receive message from queue
+  int recv(char * buffer, size_t &buff_size);
+
+private:
+  // Queue descriptor
+  RT_QUEUE _descriptor;
+};
 
 #endif

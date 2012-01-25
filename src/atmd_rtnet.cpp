@@ -19,9 +19,6 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-// Global termination interrupt
-extern bool terminate_interrupt;
-
 // Global debug flag
 #ifdef DEBUG
 extern bool enable_debug;

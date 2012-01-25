@@ -410,38 +410,9 @@ int main(int argc, char * const argv[]) {
   }
 
   // Create RT_QUEUE
-  RT_QUEUE ctrl_queue;
-  retval = rt_queue_create(&ctrl_queue, ATMD_RT_QUEUE_NAME, 200000, Q_UNLIMITED, Q_SHARED);
-  if(retval) {
-    switch(retval) {
-      case -EEXIST:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): the name is already in use.");
-        break;
-
-      case -EINVAL:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): invalid pool size.");
-        break;
-
-      case -ENOMEM:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): not enough memory available.");
-        break;
-
-      case -EPERM:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): invalid context.");
-        break;
-
-      case -ENOSYS:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): real-time support not available in userspace.");
-        break;
-
-      case -ENOENT:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): cannot open /dev/rtheap.");
-        break;
-
-      default:
-        rt_syslog(ATMD_CRIT, "rt_queue_create(): unexpected return code (%d).", retval);
-        break;
-    }
+  RTqueue ctrl_queue;
+  if(ctrl_queue.init(ATMD_RT_CTRL_QUEUE, 200000)) {
+    rt_syslog(ATMD_CRIT, "Failed to init control queue.");
     ctrl_sock.close();
     data_sock.close();
     exit(-1);
@@ -450,7 +421,7 @@ int main(int argc, char * const argv[]) {
   // Init thread params
   InitData th_info;
   th_info.heap_name = ATMD_RT_HEAP_NAME;
-  th_info.queue_name = ATMD_RT_QUEUE_NAME;
+  th_info.queue = &ctrl_queue;
   th_info.board = &board;
   th_info.sock = &data_sock;
   th_info.addr = &master_addr;
@@ -486,7 +457,6 @@ int main(int argc, char * const argv[]) {
 
   // Measure parameters object
   MeasureDef measure_info;
-  MeasureDef * minfo;
 
   // Cycle waiting for commands
   while(true) {
@@ -564,33 +534,11 @@ int main(int argc, char * const argv[]) {
             if(board.status() == ATMD_STATUS_IDLE) {
 
               // 1) enqueue the MeasureDef struct
-              minfo = static_cast<MeasureDef*>(rt_queue_alloc(&ctrl_queue, sizeof(MeasureDef)));
-              if(!minfo) {
-                rt_syslog(ATMD_CRIT, "rt_queue_alloc(): failed.");
+              measure_info.tdma_cycle(ctrl_packet.tdma_cycle());
+              if(ctrl_queue.send(reinterpret_cast<const char*>(&measure_info), sizeof(measure_info))) {
+                rt_syslog(ATMD_CRIT, "Failed to send message to the control queue.");
                 // TODO: add cleanup!
                 exit(-1);
-              }
-              ::new(minfo) MeasureDef(measure_info);
-              minfo->tdma_cycle(ctrl_packet.tdma_cycle());
-              retval = rt_queue_send(&ctrl_queue, (void*)minfo, sizeof(MeasureDef), Q_NORMAL);
-              if(retval) {
-                switch(retval) {
-                  case -EINVAL:
-                  case -EIDRM:
-                    rt_syslog(ATMD_CRIT, "rt_queue_send(): invalid queue descriptor.");
-                    // TODO: add cleanup!
-                    exit(-1);
-
-                  case -ENOMEM:
-                    rt_syslog(ATMD_CRIT, "rt_queue_send(): not enough memory available.");
-                    // TODO: add cleanup!
-                    exit(-1);
-
-                  default:
-                    rt_syslog(ATMD_CRIT, "rt_queue_send(): failed with unexpected return value (%d).", retval);
-                    // TODO: add cleanup!
-                    exit(-1);
-                }
               }
 
               // 2) Send ACK
