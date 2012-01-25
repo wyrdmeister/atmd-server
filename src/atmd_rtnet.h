@@ -55,7 +55,7 @@
 class RTnet {
 public:
   RTnet() : _sock(-1), _rtskbs(ATMD_DEF_RTSKBS), _protocol(ATMD_PROTO_NONE) { memset(_ifname, 0, IFNAMSIZ); };
-  ~RTnet() { if(_sock) rt_dev_close(_sock); };
+  ~RTnet() { if(_sock >= 0) rt_dev_close(_sock); };
 
   // Configure RTSKBS
   void rtskbs(unsigned int num) { _rtskbs = num; };
@@ -73,13 +73,13 @@ public:
   int init(bool en_bind = false);
 
   // Send packet
-  void send(const GenMsg& packet, const struct ether_addr* addr)const throw(int);
+  int send(const GenMsg& packet, const struct ether_addr* addr)const;
 
   // Receive packet
-  void recv(GenMsg& packet, struct ether_addr* addr = NULL)const throw(int);
+  int recv(GenMsg& packet, struct ether_addr* addr = NULL)const;
 
   // Close socket
-  void close() { rt_dev_close(_sock); };
+  void close() { if(_sock >= 0) rt_dev_close(_sock); };
 
   // Wait for a TDMA cycle
   unsigned long wait_tdma(unsigned long cycle);

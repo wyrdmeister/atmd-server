@@ -258,12 +258,8 @@ void VirtualBoard::control_task(void *arg) {
   ether_aton_r("FF:FF:FF:FF:FF:FF", &brd_addr);
 
   // Send broadcast packet
-  try {
-    pthis->ctrl_sock().send(packet, &brd_addr);
-
-  } catch (int e) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send broadcast packet. Error: %d", e);
-
+  if(pthis->ctrl_sock().send(packet, &brd_addr)) {
+    rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send broadcast packet.");
     // Terminate server
     terminate_interrupt = true;
     return;
@@ -281,11 +277,8 @@ void VirtualBoard::control_task(void *arg) {
 
   while(ag_count < pthis->config().agents()) {
     // Receive packet
-    try {
-      pthis->ctrl_sock().recv(packet, &remote_addr);
-    } catch(int e) {
-      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet. Error: %d", e);
-
+    if(pthis->ctrl_sock().recv(packet, &remote_addr)) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet.");
       // Terminate server
       terminate_interrupt = true;
       return;
@@ -369,12 +362,9 @@ void VirtualBoard::control_task(void *arg) {
       packet.tdma_cycle(cycle);
       packet.encode();
 
-      try {
-        pthis->ctrl_sock().send(packet, &brd_addr);
-
-      } catch(int e) {
+      if(pthis->ctrl_sock().send(packet, &brd_addr)) {
         // Failed to send packet
-        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send control packet over RTnet. Error: %d.", e);
+        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send control packet over RTnet.");
         // Terminate server
         terminate_interrupt = true;
         return;
@@ -392,11 +382,8 @@ void VirtualBoard::control_task(void *arg) {
 
       while(ag_count < pthis->config().agents()) {
         // Receive packet
-        try {
-          pthis->ctrl_sock().recv(packet, &remote_addr);
-        } catch(int e) {
-          rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet. Error: %d", e);
-
+        if(pthis->ctrl_sock().recv(packet, &remote_addr)) {
+          rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet.");
           // Terminate server
           terminate_interrupt = true;
           return;
@@ -537,12 +524,9 @@ void VirtualBoard::control_task(void *arg) {
       uint32_t agent = packet.agent_id();
 
       // Send packets to single agent
-      try {
-        pthis->ctrl_sock().send(packet, pthis->get_agent(agent).agent_addr());
-
-      } catch(int e) {
+      if(pthis->ctrl_sock().send(packet, pthis->get_agent(agent).agent_addr())) {
         // Failed to send packet
-        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send control packet over RTnet. Error: %d.", e);
+        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send control packet over RTnet.");
         // Terminate server
         terminate_interrupt = true;
         return;
@@ -550,11 +534,8 @@ void VirtualBoard::control_task(void *arg) {
 
       while(true) {
         // Wait for acknowledge from agent
-        try {
-          pthis->ctrl_sock().recv(packet, &remote_addr);
-        } catch(int e) {
-          rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet. Error: %d", e);
-
+        if(pthis->ctrl_sock().recv(packet, &remote_addr)) {
+          rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet.");
           // Terminate server
           terminate_interrupt = true;
           return;
@@ -660,11 +641,8 @@ void VirtualBoard::rt_data_task(void *arg) {
     }
 
     // Get a packet
-    try {
-      pthis->data_sock().recv(packet, &remote_addr);
-    } catch(int e) {
+    if(pthis->data_sock().recv(packet, &remote_addr)) {
       rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: failed to receive a packet over RTnet socket.");
-
       // Terminate server
       terminate_interrupt = true;
       return;

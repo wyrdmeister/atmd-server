@@ -329,10 +329,7 @@ int main(int argc, char * const argv[]) {
       exit(0);
     }
 
-    try {
-      ctrl_sock.recv(ctrl_packet, &master_addr);
-
-    } catch(int e) {
+    if(ctrl_sock.recv(ctrl_packet, &master_addr)) {
       rt_syslog(ATMD_CRIT, "Failed to receive a packet waiting for master broadcast. Terminating.");
       exit(-1);
     }
@@ -363,10 +360,7 @@ int main(int argc, char * const argv[]) {
   ctrl_packet.encode();
 
   // Answer to master
-  try {
-    ctrl_sock.send(ctrl_packet, &master_addr);
-
-  } catch(int e) {
+  if(ctrl_sock.send(ctrl_packet, &master_addr)) {
     rt_syslog(ATMD_CRIT, "Failed to send a packet while answering master broadcast. Terminating.");
     exit(-1);
   }
@@ -502,9 +496,7 @@ int main(int argc, char * const argv[]) {
       break;
 
     // Wait for a control packet
-    try {
-      ctrl_sock.recv(ctrl_packet, &remote_addr);
-    } catch(int e) {
+    if(ctrl_sock.recv(ctrl_packet, &remote_addr)) {
       rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
       // TODO: add cleanup of RT tasks
       ctrl_sock.close();
@@ -605,9 +597,7 @@ int main(int argc, char * const argv[]) {
               ctrl_packet.clear();
               ctrl_packet.type(ATMD_CMD_ACK);
               ctrl_packet.encode();
-              try {
-                ctrl_sock.send(ctrl_packet, &master_addr);
-              } catch(int e) {
+              if(ctrl_sock.send(ctrl_packet, &master_addr)) {
                 rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
                 // TODO: add cleanup of RT tasks
                 ctrl_sock.close();
@@ -634,9 +624,7 @@ int main(int argc, char * const argv[]) {
               ctrl_packet.clear();
               ctrl_packet.type( (board.status() == ATMD_STATUS_ERR) ? ATMD_CMD_ERROR : ATMD_CMD_BUSY );
               ctrl_packet.encode();
-              try {
-                ctrl_sock.send(ctrl_packet, &master_addr);
-              } catch(int e) {
+              if(ctrl_sock.send(ctrl_packet, &master_addr)) {
                 rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
                 // TODO: add cleanup of RT tasks
                 ctrl_sock.close();

@@ -123,7 +123,13 @@ int RTnet::init(bool en_bind) {
 /* @fn int RTnet::send(const GenMsg& packet, struct ether_addr* address)
  *
  */
-void RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const throw(int) {
+int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
+  // Check address
+  if(!addr) {
+    rt_syslog(ATMD_ERR, "RTnet [send]: passed a null address.");
+    return -1;
+  }
+
   // Compose address
   struct sockaddr_ll remote_addr;
   memset(&remote_addr, 0, sizeof(struct sockaddr_ll));
@@ -135,15 +141,17 @@ void RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const throw
   int retval = rt_dev_sendto(_sock, packet.get_buffer(), packet.size(), 0, (struct sockaddr*)&remote_addr, sizeof(struct sockaddr_ll));
   if(retval < 0) {
     rt_syslog(ATMD_ERR, "RTnet [send]: failed to send packet. Error: '%s'.", strerror(-retval));
-    throw(retval);
+    return -1;
   }
+
+  return 0;
 }
 
 
 /* @fn int RTnet::recv(GenMsg& packet, struct ether_addr* remote_addr = NULL)
  *
  */
-void RTnet::recv(GenMsg& packet, struct ether_addr* addr)const throw(int) {
+int RTnet::recv(GenMsg& packet, struct ether_addr* addr)const {
   // Clear packet
   packet.clear();
 
@@ -156,13 +164,15 @@ void RTnet::recv(GenMsg& packet, struct ether_addr* addr)const throw(int) {
   int retval = rt_dev_recvfrom(_sock, packet.get_buffer(), packet.maxsize(), 0, (struct sockaddr*)&remote_addr, &remote_len);
   if(retval < 0) {
     rt_syslog(ATMD_ERR, "RTnet [recv]: failed to receive packet. Error: '%s'.", strerror(-retval));
-    throw(retval);
+    return -1;
   }
 
   // Copy remote addr
   if(addr) {
     memcpy(&addr, &remote_addr.sll_addr, sizeof(struct ether_addr));
   }
+
+  return 0;
 }
 
 
@@ -173,15 +183,19 @@ unsigned long RTnet::wait_tdma(unsigned long cycle) {
   unsigned long curr = 0;
   while(true) {
     curr = wait_tdma();
+    if(curr == 0)
+      // Error in TDMA
+      break;
     if(curr < cycle)
       continue;
     else if(curr == cycle)
-      return curr;
+      break;
     else {
       rt_syslog(ATMD_ERR, "RTnet [recv]: tried to sync on a TDMA cycle in the past.");
-      return curr;
+      break;
     }
   }
+  return curr;
 }
 
 

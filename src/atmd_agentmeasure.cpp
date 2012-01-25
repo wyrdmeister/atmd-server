@@ -224,11 +224,8 @@ void atmd_measure(void *arg) {
     packet.window_start(measure_start);
     packet.window_time(measure_end - measure_start);
     packet.encode();
-    try {
-      sys->sock->send(packet, sys->addr);
-    } catch(int e) {
-      rt_syslog(ATMD_CRIT, "Measure [atmd_measure]: failed to send a packet over RTnet. Error: %d", e);
-
+    if(sys->sock->send(packet, sys->addr)) {
+      rt_syslog(ATMD_CRIT, "Measure [atmd_measure]: failed to send a packet over RTnet.");
       // Terminate agent
       terminate_interrupt = true;
       return;
@@ -560,10 +557,8 @@ int atmd_send_start(uint32_t id, EventData& events, RTnet* sock, const struct et
     count = packet.encode(count, events.ch(), events.stoptime(), events.retrig());
 
     // Send packet
-    try {
-      sock->send(packet, addr);
-    } catch(int e) {
-      rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message. Error: %d.", e);
+    if(sock->send(packet, addr)) {
+      rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message over RTnet.");
       return -1;
     }
   }
