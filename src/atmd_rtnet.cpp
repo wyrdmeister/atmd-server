@@ -176,7 +176,7 @@ int RTnet::recv(GenMsg& packet, struct ether_addr* addr)const {
 
     // Copy remote addr
     if(addr) {
-      memcpy(&addr, &(remote_addr.sll_addr), sizeof(struct ether_addr));
+      memcpy(addr, &(remote_addr.sll_addr), sizeof(struct ether_addr));
 
     } else {
 #ifdef DEBUG
