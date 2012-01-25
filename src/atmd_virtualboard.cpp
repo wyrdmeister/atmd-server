@@ -218,6 +218,7 @@ void VirtualBoard::control_task(void *arg) {
 
   // Now we can search for agents!
   AgentMsg packet;
+  packet.clear();
   packet.type(ATMD_CMD_BRD);
   packet.version(VERSION);
   packet.encode();

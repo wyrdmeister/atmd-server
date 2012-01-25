@@ -58,29 +58,11 @@ void gen_handler(int signal, siginfo_t *si, void* context) {
   if(signal == SIGHUP) {
     terminate_interrupt = true;
 
-  } else if(signal == SIGXCPU || signal == SIGDEBUG) {
+  } else if(signal == SIGDEBUG) {
     // These two signal should be ignored as they are sent
     // every time a task switch to secondary mode
     unsigned int reason = si->si_value.sival_int;
-    void *bt[32];
-    int nentries;
-    ucontext_t *uc = (ucontext_t *)context;
-
-    // Log SIGDEBUG
     syslog(ATMD_WARN, "\nSIGDEBUG received, reason %d: %s\n", reason, reason <= SIGDEBUG_WATCHDOG ? reason_str[reason] : "<unknown>");
-
-    nentries = backtrace(bt,32);
-    // overwrite sigaction with caller's address
-#if defined(__i386__)
-    bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
-#elif defined(__x86_64__)
-    bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
-#endif
-    char ** messages = backtrace_symbols(bt, nentries);
-
-    // Print backtrace
-    for(int i = 1; i < nentries; i++)
-      syslog(ATMD_INFO, "[BT] %s#", messages[i]);
 
   } else {
     switch(signal) {
@@ -100,6 +82,24 @@ void gen_handler(int signal, siginfo_t *si, void* context) {
         syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
         break;
     }
+
+    // Getting backtrace
+    void *bt[32];
+    int nentries;
+    ucontext_t *uc = (ucontext_t *)context;
+
+    nentries = backtrace(bt,32);
+    // overwrite sigaction with caller's address
+#if defined(__i386__)
+    bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+#elif defined(__x86_64__)
+    bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
+#endif
+    char ** messages = backtrace_symbols(bt, nentries);
+
+    // Print backtrace
+    for(int i = 1; i < nentries; i++)
+      syslog(ATMD_INFO, "[BT] %s#", messages[i]);
 
     exit(signal);
   }
@@ -298,6 +298,33 @@ int main(int argc, char * const argv[])
   sleeptime.tv_sec = 1;
   sleeptime.tv_nsec = 0;
   nanosleep(&sleeptime, NULL);
+
+  // Shadow task to Xenomai domain
+  RT_TASK main_task;
+  int retval = rt_task_shadow(&main_task, "atmd_server", 0, T_FPU);
+  if(retval) {
+    switch(retval) {
+      case -EBUSY:
+        syslog(ATMD_ERR, "Failed to shadow main task. Already in Xenomai context.");
+        break;
+
+      case -ENOMEM:
+        syslog(ATMD_ERR, "Failed to shadow main task. Not enough memory available.");
+        break;
+
+      case -EEXIST:
+        syslog(ATMD_ERR, "Failed to shadow main task. Name already in use.");
+        break;
+
+      case -EPERM:
+        syslog(ATMD_ERR, "Failed to shadow main task. Invalid context.");
+        break;
+
+      default:
+        break;
+    }
+    exit(-1);
+  }
 
   // Create VirtualBoard
   VirtualBoard board(server_conf);

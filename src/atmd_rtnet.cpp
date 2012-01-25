@@ -139,7 +139,7 @@ int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
   memcpy(&remote_addr.sll_addr, addr, sizeof(struct ether_addr));
 
   // Send message
-  int retval = rt_dev_sendto(_sock, packet.get_buffer(), packet.size(), 0, (struct sockaddr*)&remote_addr, sizeof(struct sockaddr_ll));
+  int retval = rt_dev_sendto(_sock, packet.get_buffer(), (packet.size() > 46) ? packet.size() : 46, 0, (struct sockaddr*)&remote_addr, sizeof(struct sockaddr_ll));
   if(retval < 0) {
     rt_syslog(ATMD_ERR, "RTnet [send]: failed to send packet. Error: '%s'.", strerror(-retval));
     return -1;
