@@ -40,7 +40,7 @@ case "${1:-''}" in
   'stop')
 	atmd_stop
 	;;
-	
+
   'restart')
 	atmd_stop
 	atmd_start

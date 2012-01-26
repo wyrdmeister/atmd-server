@@ -15,22 +15,29 @@ AC_HEADER_STDC
 dnl Enable debug
 AC_ARG_ENABLE(debug, [  --enable-debug  Enable debug code], [en_debug=yes], [])
 
+dnl Define targets
+TARGETS=""
+
+dnl Enable compilation of atmd_server
+AC_ARG_ENABLE(server, [  --enable-server  Enable build of server program], [en_server=yes], [])
+
+dnl Enable compilation of atmd_server
+AC_ARG_ENABLE(agent, [  --enable-agent  Enable build of agent program], [en_agent=yes], [])
+
+if test yes != "$en_agent" && test yes != "$en_server"; then
+   AC_MSG_ERROR([*** You should at least enable build of server or agent. ***])
+fi
+
+dnl Get default CPPFLAGS
 if test yes = "$en_debug"; then
   CPPFLAGS="$CPPFLAGS -g -O0 -DDEBUG"
 else
   CPPFLAGS="$CPPFLAGS -O2"
 fi
 
-
-LIBCURL_CHECK_CONFIG([yes], [7])
-AC_SUBST(CURLLIBS)
-
-PKG_CHECK_MODULES([PCI], [libpci >= 3.0], [], [AC_CHECK_LIB(pci, pci_scan_bus)])
-AC_CHECK_HEADERS([pci/pci.h], [], [AC_MSG_ERROR([Cannot find pci.h - Maybe you need to install libpci-dev])])
-
+dnl Check for common libraries
 dnl Check for libpcre++
 PKG_CHECK_MODULES([PCRECPP], [libpcrecpp >= 7])
-
 
 dnl Search for XENOMAI
 XENO_CONFIG=`which xeno-config 2>/dev/null`
@@ -54,12 +61,31 @@ XENO_LIBS="`${XENO_CONFIG} --skin rtdm --ldflags --skin native --ldflags | tr '\
 AC_SUBST([XENO_LIBS])
 CPPFLAGS="$CPPFLAGS `${XENO_CONFIG} --skin native --cflags | sed 's/-Werror-implicit-function-declaration//g' | tr '\n' ' '`"
 
-
 dnl Search for RTNET
 RTNET_DIR="`which rtnet | sed -e 's/\/sbin\/rtnet//'`"
 if test \! -d "${RTNET_DIR}/include"; then
     AC_MSG_ERROR([*** RTnet install directory not found! ***])
 fi
 CPPFLAGS="$CPPFLAGS -I${RTNET_DIR}/include"
+
+dnl If we build server...
+if test yes = "$en_server"; then
+  TARGETS="$TARGETS atmd_server"
+
+  dnl Check for libcurl
+  LIBCURL_CHECK_CONFIG([yes], [7])
+  AC_SUBST(CURLLIBS)
+fi
+
+dnl If we build agent...
+if test yes = "$en_agent"; then
+  TARGETS="$TARGETS atmd_agent"
+
+  dnl Check for libpci
+  PKG_CHECK_MODULES([PCI], [libpci >= 3.0], [], [AC_CHECK_LIB(pci, pci_scan_bus)])
+  AC_CHECK_HEADERS([pci/pci.h], [], [AC_MSG_ERROR([Cannot find pci.h - Maybe you need to install libpci-dev])])
+fi
+
+AC_SUBST([TARGETS])
 
 AC_OUTPUT([Makefile src/Makefile])

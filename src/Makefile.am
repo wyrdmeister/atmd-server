@@ -1,6 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
-bin_PROGRAMS = atmd_server atmd_agent
+bin_PROGRAMS = $(TARGETS)
+EXTRA_PROGRAMS = atmd_server atmd_agent
 
 atmd_server_SOURCES = \
 	atmd_server.cpp \

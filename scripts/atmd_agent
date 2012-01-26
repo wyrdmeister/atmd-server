@@ -1,0 +1,53 @@
+#!/bin/bash
+#
+### BEGIN INIT INFO
+# Provides:          atmd_agent
+# Required-Start:    $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start and stop the Acam ATMD-GPX board control agent
+### END INIT INFO
+#
+. /lib/lsb/init-functions
+
+
+atmd_start() {
+    log_daemon_msg "Starting ATMD-GPX control agent" "atmd_agent"
+    start-stop-daemon --start --quiet --exec "/usr/local/bin/atmd_agent" --pidfile "/var/run/atmd_agent.pid"
+    RET="$?"
+    log_end_msg $RET
+    return $RET
+}
+
+atmd_stop() {
+    log_daemon_msg "Stopping ATMD-GPX control agent" "atmd_agent"
+    start-stop-daemon --stop --signal 1 --quiet --name "atmd_agent" --retry 3 --pidfile "/var/run/atmd_agent.pid"
+    RET="$?"
+    log_end_msg $RET
+    rm -f "/var/run/atmd_agent.pid"
+    return $RET
+}
+
+#
+# main()
+#
+
+case "${1:-''}" in
+  'start')
+	atmd_start
+	;;
+
+  'stop')
+	atmd_stop
+	;;
+
+  'restart')
+	atmd_stop
+	atmd_start
+	;;
+
+  *)
+	echo "Usage: $SELF start|stop|restart"
+	exit 1
+	;;
+esac
