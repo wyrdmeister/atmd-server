@@ -134,7 +134,7 @@ void atmd_measure(void *arg) {
     ctrl_packet.type(ATMD_CMD_ACK);
     ctrl_packet.encode();
     if(ctrl_if.reply(ATMD_CMD_ACK, ctrl_packet.get_buffer(), ctrl_packet.size())) {
-      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to reply to control command.");
+      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: failed to reply to control command.");
       // Terminate server
       terminate_interrupt = true;
       return;
@@ -147,6 +147,11 @@ void atmd_measure(void *arg) {
       sys->board->status(ATMD_STATUS_ERR);
       continue;
     }
+
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully got sync to TDMA starting measure. Window: %.0f us. Total time: %.3f s.", meas_info.window_time()/1e3, meas_info.measure_time()/1e9);
+#endif
 
     // Start measure cycle
     RTIME measure_start = rt_timer_read();
@@ -165,6 +170,11 @@ void atmd_measure(void *arg) {
         break;
       }
 
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully got start %d. Got %d events.", index, events.size());
+#endif
+
       // Send data through real time network
       retval = atmd_send_start(index, events, sys->sock, sys->addr);
       if(retval) {
@@ -173,14 +183,21 @@ void atmd_measure(void *arg) {
         break;
       }
 
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully sent data of start %d through RTnet.", index);
+#endif
+
       // Increment start counter
       index++;
 
       // Update measure_end
       measure_end = rt_timer_read();
 
-      if(sys->board->stop())
+      if(sys->board->stop()) {
+        rt_syslog(ATMD_INFO, "Measure [atmd_measure]: stopping measurement.");
         break;
+      }
 
       // Sleep to let RTnet to transfer the data
       rt_task_sleep(meas_info.deadtime());
@@ -198,6 +215,11 @@ void atmd_measure(void *arg) {
       terminate_interrupt = true;
       return;
     }
+
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully sent termination data packet through RTnet.");
+#endif
   }
 
   // Cleanup
