@@ -37,6 +37,9 @@ extern bool enable_debug;
 void atmd_measure(void *arg) {
   int retval = 0;
 
+  // Auto init RT print services
+  rt_print_auto_init(1);
+
   // Cast argument
   InitData *sys = static_cast<InitData*>(arg);
 
@@ -62,6 +65,11 @@ void atmd_measure(void *arg) {
         return;
     }
   }
+
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully bound to RT heap.");
+#endif
 
   // Create control endpoint
   RTcomm ctrl_if;
@@ -95,6 +103,7 @@ void atmd_measure(void *arg) {
     }
   }
 
+  // Cycle waiting for commands
   while(true) {
 
     // Check termination flag
@@ -125,6 +134,11 @@ void atmd_measure(void *arg) {
       }
       continue;
     }
+
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: starting measurement.");
+#endif
 
     // Starting measure
     sys->board->status(ATMD_STATUS_RUNNING);
