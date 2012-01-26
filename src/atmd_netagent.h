@@ -23,7 +23,7 @@
 #define ATMD_AGENT_NETWORK_H
 
 // Message sizes
-#define ATMD_PACKET_SIZE    1500
+#define ATMD_PACKET_SIZE    1496
 #define ATMD_EV_SIZE        ( sizeof(int8_t) + sizeof(uint32_t) * 2 )
 
 // Message types
