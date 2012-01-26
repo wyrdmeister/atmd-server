@@ -82,7 +82,10 @@ public:
     _ctrl_sock.close();
     _data_sock.close();
     curl_easy_cleanup(this->easy_handle);
-    // TODO: task cleanup!
+    // Unblock tasks
+    rt_task_unblock(&_ctrl_task);
+    rt_task_unblock(&_rt_data_task);
+    rt_task_unblock(&_data_task);
   };
 
   // Start all the relevant RT tasks and sends broadcasts to find agents

@@ -4,13 +4,23 @@ AC_INIT(atmd_server, 3.0)
 
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 
+CPPFLAGS="-Wall -fno-strict-aliasing"
+CXXFLAGS="$CPPFLAGS"
+
 AC_ISC_POSIX
 AC_PROG_CXX
 AM_PROG_CC_STDC
 AC_HEADER_STDC
 
-AC_ARG_ENABLE(simulation, [  --enable-simulation  Enable ATMD-GPX board simulation], [AC_DEFINE(ATMD_SIM)], [])
-AC_ARG_ENABLE(debug, [  --enable-debug  Enable debug code], [AC_DEFINE(DEBUG)], [])
+dnl Enable debug
+AC_ARG_ENABLE(debug, [  --enable-debug  Enable debug code], [en_debug=yes], [])
+
+if test yes = "$en_debug"; then
+  CPPFLAGS="$CPPFLAGS -g -O0 -DDEBUG"
+else
+  CPPFLAGS="$CPPFLAGS -O2"
+fi
+
 
 LIBCURL_CHECK_CONFIG([yes], [7])
 AC_SUBST(CURLLIBS)
@@ -41,16 +51,15 @@ case "$XENO_VERSION" in
 esac
 
 XENO_LIBS="`${XENO_CONFIG} --skin rtdm --ldflags --skin native --ldflags | tr '\n' ' '`"
-XENO_CFLAGS="`${XENO_CONFIG} --skin rtdm --cflags --skin native --cflags | tr '\n' ' '`"
-AC_SUBST(XENO_LIBS)
-AC_SUBST(XENO_CFLAGS)
+AC_SUBST([XENO_LIBS])
+CPPFLAGS="$CPPFLAGS `${XENO_CONFIG} --skin native --cflags | sed 's/-Werror-implicit-function-declaration//g' | tr '\n' ' '`"
+
 
 dnl Search for RTNET
 RTNET_DIR="`which rtnet | sed -e 's/\/sbin\/rtnet//'`"
 if test \! -d "${RTNET_DIR}/include"; then
     AC_MSG_ERROR([*** RTnet install directory not found! ***])
 fi
-RTNET_CFLAGS="-I${RTNET_DIR}/include"
-AC_SUBST(RTNET_CFLAGS)
+CPPFLAGS="$CPPFLAGS -I${RTNET_DIR}/include"
 
 AC_OUTPUT([Makefile src/Makefile])

@@ -55,54 +55,60 @@ static const char *reason_str[] = {
  * Log most common abort signals and get a backtrace in case of SIGDEBUG.
  */
 void gen_handler(int signal, siginfo_t *si, void* context) {
-  if(signal == SIGHUP) {
-    terminate_interrupt = true;
+  unsigned int reason = 0;
+  switch(signal) {
+    case SIGHUP:
+      terminate_interrupt = true;
+      return;
 
-  } else if(signal == SIGDEBUG) {
-    // These two signal should be ignored as they are sent
-    // every time a task switch to secondary mode
-    unsigned int reason = si->si_value.sival_int;
-    syslog(ATMD_WARN, "\nSIGDEBUG received, reason %d: %s\n", reason, reason <= SIGDEBUG_WATCHDOG ? reason_str[reason] : "<unknown>");
+    case SIGDEBUG:
+      // These two signal should be ignored as they are sent
+      // every time a task switch to secondary mode
+      reason = si->si_value.sival_int;
+      syslog(ATMD_WARN, "\nSIGDEBUG received, reason %d: %s\n", reason, reason <= SIGDEBUG_WATCHDOG ? reason_str[reason] : "<unknown>");
+      break;
 
-  } else {
-    switch(signal) {
-      case SIGINT:
-        syslog(ATMD_CRIT, "Received signal SIGINT. Terminating.");
-        break;
-      case SIGFPE:
-        syslog(ATMD_CRIT, "Received signal SIGFPE. Terminating.");
-        break;
-      case SIGSEGV:
-        syslog(ATMD_CRIT, "Received signal SIGSEGV. Terminating.");
-        break;
-      case SIGPIPE:
-        syslog(ATMD_CRIT, "Received signal SIGPIPE. Terminating.");
-        break;
-      default:
-        syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
-        break;
-    }
+    case SIGINT:
+      syslog(ATMD_CRIT, "Received signal SIGINT. Terminating.");
+      break;
 
-    // Getting backtrace
-    void *bt[32];
-    int nentries;
-    ucontext_t *uc = (ucontext_t *)context;
+    case SIGFPE:
+      syslog(ATMD_CRIT, "Received signal SIGFPE. Terminating.");
+      break;
 
-    nentries = backtrace(bt,32);
-    // overwrite sigaction with caller's address
-#if defined(__i386__)
-    bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
-#elif defined(__x86_64__)
-    bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
-#endif
-    char ** messages = backtrace_symbols(bt, nentries);
+    case SIGSEGV:
+      syslog(ATMD_CRIT, "Received signal SIGSEGV. Terminating.");
+      break;
 
-    // Print backtrace
-    for(int i = 1; i < nentries; i++)
-      syslog(ATMD_INFO, "[BT] %s#", messages[i]);
+    case SIGPIPE:
+      syslog(ATMD_CRIT, "Received signal SIGPIPE. Terminating.");
+      break;
 
-    exit(signal);
+    default:
+      syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
+      break;
   }
+
+  // Getting backtrace
+  void *bt[32];
+  int nentries;
+  ucontext_t *uc = (ucontext_t *)context;
+
+  nentries = backtrace(bt,32);
+  // overwrite sigaction with caller's address
+#if defined(__i386__)
+  bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+#elif defined(__x86_64__)
+  bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
+#endif
+  char ** messages = backtrace_symbols(bt, nentries);
+
+  // Print backtrace
+  for(int i = 1; i < nentries; i++)
+    syslog(ATMD_INFO, "[BT] %s#", messages[i]);
+
+  if(signal != SIGDEBUG)
+    exit(signal);
 }
 
 
@@ -224,7 +230,7 @@ int main(int argc, char * const argv[])
   // Initialize libcurl
   if(curl_global_init(CURL_GLOBAL_ALL)) {
     syslog(ATMD_INFO, "Failed to initialize libcurl. Exiting.");
-    exit(-1);
+    return -1;
   }
 
 
@@ -233,14 +239,16 @@ int main(int argc, char * const argv[])
   if(!pid_file.is_open()) {
     if(pid_filename == ATMD_PID_FILE) {
       syslog(ATMD_CRIT, "Could not open pid file %s. Exiting.", pid_filename.c_str());
-      exit(-1);
+      curl_global_cleanup();
+      return -1;
     } else {
       syslog(ATMD_ERR, "Could not open user supplied pid file %s. Trying default.", pid_filename.c_str());
       pid_filename = ATMD_PID_FILE;
       pid_file.open(pid_filename.c_str());
       if(!pid_file.is_open()) {
         syslog(ATMD_CRIT, "Could not open pid file %s. Exiting.", pid_filename.c_str());
-        exit(-1);
+        curl_global_cleanup();
+        return -1;
       }
     }
   }
@@ -250,24 +258,34 @@ int main(int argc, char * const argv[])
   AtmdConfig server_conf;
   if(server_conf.read(conf_filename)) {
     syslog(ATMD_CRIT, "Cannot open configuration file '%s'. Exiting.", conf_filename.c_str());
-    exit(-1);
+    curl_global_cleanup();
+    return -1;
   }
 
 
-  // Board found (or simulation mode enabled). We can fork.
-  pid_t child_pid = fork();
-  if(child_pid == -1) {
-    // Fork failed.
-    syslog(ATMD_CRIT, "Terminating atmd-server version %s because fork failed with error \"%m\".", VERSION);
-    exit(-1);
+  // Disable fork and daemonization with debug enabled
 
-  } else if(child_pid != 0) {
-    // We are still in the parent. We save the child pid and then exit.
-    pid_file << child_pid;
-    pid_file.close();
-    syslog(ATMD_INFO, "Fork to background successful. Child pid %d saved in %s.", child_pid, pid_filename.c_str());
-    exit(0);
+#ifdef DEBUG
+  if(!enable_debug) {
+#endif
+    // Board found. We can fork.
+    pid_t child_pid = fork();
+    if(child_pid == -1) {
+      // Fork failed.
+      syslog(ATMD_CRIT, "Terminating atmd-server version %s because fork failed with error \"%m\".", VERSION);
+      curl_global_cleanup();
+      return -1;
+
+    } else if(child_pid != 0) {
+      // We are still in the parent. We save the child pid and then exit.
+      pid_file << child_pid;
+      pid_file.close();
+      syslog(ATMD_INFO, "Fork to background successful. Child pid %d saved in %s.", child_pid, pid_filename.c_str());
+      return 0;
+    }
+#ifdef DEBUG
   }
+#endif
 
   // Here we are in the child
 
@@ -276,24 +294,31 @@ int main(int argc, char * const argv[])
 
   // DAEMONIZE CHILD PROCESS
 
-  // Change umask to 0
-  umask(0);
+#ifdef DEBUG
+  if(!enable_debug) {
+#endif
+    // Change umask to 0
+    umask(0);
 
-  // Change session id to detach from controlling tty
-  setsid();
+    // Change session id to detach from controlling tty
+    setsid();
 
-  // Change current directory to root
-  if(chdir("/"))
-    syslog(ATMD_WARN, "Cannot change working directory to \"/\" (Error: %m).");
+    // Change current directory to root
+    if(chdir("/"))
+      syslog(ATMD_WARN, "Cannot change working directory to \"/\" (Error: %m).");
 
-  // Redirect standard streams to /dev/null
-  if(!freopen( "/dev/null", "r", stdin))
-    syslog(ATMD_WARN, "Cannot redirect stdin to \"/dev/null\" (Error: %m).");
-  if(!freopen( "/dev/null", "w", stdout))
-    syslog(ATMD_WARN, "Cannot redirect stdout to \"/dev/null\" (Error: %m).");
-  if(!freopen( "/dev/null", "w", stderr))
-    syslog(ATMD_WARN, "Cannot redirect stderr to \"/dev/null\" (Error: %m).");
+    // Redirect standard streams to /dev/null
+    if(!freopen( "/dev/null", "r", stdin))
+      syslog(ATMD_WARN, "Cannot redirect stdin to \"/dev/null\" (Error: %m).");
+    if(!freopen( "/dev/null", "w", stdout))
+      syslog(ATMD_WARN, "Cannot redirect stdout to \"/dev/null\" (Error: %m).");
+    if(!freopen( "/dev/null", "w", stderr))
+      syslog(ATMD_WARN, "Cannot redirect stderr to \"/dev/null\" (Error: %m).");
+#ifdef DEBUG
+  }
+#endif
 
+  // Sleep...
   struct timespec sleeptime;
   sleeptime.tv_sec = 1;
   sleeptime.tv_nsec = 0;
@@ -323,7 +348,8 @@ int main(int argc, char * const argv[])
       default:
         break;
     }
-    exit(-1);
+    curl_global_cleanup();
+    return -1;
   }
 
   // Create VirtualBoard
@@ -348,7 +374,7 @@ int main(int argc, char * const argv[])
       default:
         break;
     }
-    exit(-1);
+    return -1;
   }
 
   // Define the time for which the main cycle sleep between subsequent calls to get_command

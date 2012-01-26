@@ -1311,8 +1311,10 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
 
         syslog(ATMD_INFO, "VirtualBoard [save_measure]: remotely saving measurement to \"%s/%s\".", this->_hostname.c_str(), filename.c_str());
 
+#ifdef DEBUG
         if(enable_debug)
           syslog(ATMD_DEBUG, "VirtualBoard [save_measure]: full url: %s.", fullurl.c_str());
+#endif
 
         // Start network transfer
         struct timeval t_begin, t_end;
