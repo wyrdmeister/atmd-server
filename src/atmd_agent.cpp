@@ -284,20 +284,21 @@ int main(int argc, char * const argv[]) {
 
       case -ENOMEM:
         syslog(ATMD_CRIT, "The system fails to get enough dynamic memory from the global real-time heap in order to create or register the task.");
-        exit(retval);
+        break;
 
       case -EEXIST:
         syslog(ATMD_CRIT, "The name is already in use by some registered object.\n");
-        exit(retval);
+        break;
 
       case -EPERM:
         syslog(ATMD_CRIT, "This service was called from an asynchronous context.\n");
-        exit(retval);
+        break;
 
       default:
         syslog(ATMD_CRIT, "rt_task_shadow failed with an unexpected code (%d)\n.", retval);
-        exit(retval);
+        break;
     }
+    return -1;
   }
 
   // Init rt_printf and rt_syslog
@@ -313,7 +314,7 @@ int main(int argc, char * const argv[]) {
 
   if(ctrl_sock.init(true)) {
     rt_syslog(ATMD_CRIT, "Failed to initialize RTnet control socket. Terminating.");
-    exit(-1);
+    return -1;
   }
 
 
@@ -327,13 +328,13 @@ int main(int argc, char * const argv[]) {
     // Check for termination
     if(terminate_interrupt) {
       ctrl_sock.close();
-      exit(0);
+      return 0;
     }
 
     memset(&master_addr, 0, sizeof(struct ether_addr));
     if(ctrl_sock.recv(ctrl_packet, &master_addr)) {
       rt_syslog(ATMD_CRIT, "Failed to receive a packet waiting for master broadcast. Terminating.");
-      exit(-1);
+      return -1;
     }
 
 #ifdef DEBUG
@@ -375,7 +376,7 @@ int main(int argc, char * const argv[]) {
   // Answer to master
   if(ctrl_sock.send(ctrl_packet, &master_addr)) {
     rt_syslog(ATMD_CRIT, "Failed to send a packet while answering master broadcast. Terminating.");
-    exit(-1);
+    return -1;
   }
 
 #ifdef DEBUG
@@ -391,7 +392,7 @@ int main(int argc, char * const argv[]) {
   if(data_sock.init()) {
     rt_syslog(ATMD_CRIT, "Failed to initialize RTnet data socket. Terminating.");
     ctrl_sock.close();
-    exit(-1);
+    return -1;
   }
 
 #ifdef DEBUG
@@ -430,7 +431,7 @@ int main(int argc, char * const argv[]) {
     }
     ctrl_sock.close();
     data_sock.close();
-    exit(-1);
+    return -1;
   }
 
 #ifdef DEBUG
@@ -468,7 +469,7 @@ int main(int argc, char * const argv[]) {
     }
     ctrl_sock.close();
     data_sock.close();
-    exit(-1);
+    return -1;
   }
 
 #ifdef DEBUG
@@ -483,7 +484,7 @@ int main(int argc, char * const argv[]) {
     // TODO: add cleanup of RT tasks
     ctrl_sock.close();
     data_sock.close();
-    exit(-1);
+    return -1;
   }
 
   // Remote address
@@ -502,16 +503,16 @@ int main(int argc, char * const argv[]) {
     // Wait for a control packet
     if(ctrl_sock.recv(ctrl_packet, &remote_addr)) {
       rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
-      // TODO: add cleanup of RT tasks
-      ctrl_sock.close();
-      data_sock.close();
-      exit(-1);
+      terminate_interrupt = true;
+      continue;
     }
 
     // Verify sender (if it's not our master we should ignore the packet)
-    if(!memcmp(&remote_addr, &master_addr, sizeof(struct ether_addr)))
+    if(!memcmp(&remote_addr, &master_addr, sizeof(struct ether_addr))) {
       // Bad address
+      rt_syslog(ATMD_WARN, "Received a control packet from an unknown master. Address was '%s'.", ether_ntoa(&remote_addr))
       continue;
+    }
 
     // Decode packet
     ctrl_packet.decode();
@@ -523,6 +524,7 @@ int main(int argc, char * const argv[]) {
       case ATMD_CMD_HELLO:
       case ATMD_CMD_ACK:
         // Ignore these packet types
+        rt_syslog(ATMD_WARN, "Received an unexpected packet with type (%d).", ctrl_packet.type());
         break;
 
       case ATMD_CMD_MEAS_SET:
@@ -541,23 +543,24 @@ int main(int argc, char * const argv[]) {
         measure_info.timeout(ctrl_packet.timeout());
         measure_info.deadtime(ctrl_packet.deadtime());
 
+        // Prepare answer
+        ctrl_packet.clear();
+
         // Configure board
-        if(board.config())
+        if(board.config()) {
           // PLL not locked. Abort measure
           board.status(ATMD_STATUS_ERR);
+          ctrl_packet.type(ATMD_CMD_ERROR);
+        } else {
+          ctrl_packet.type(ATMD_CMD_ACK);
+        }
 
         // Send back ACK
-        ctrl_packet.clear();
-        ctrl_packet.type(ATMD_CMD_ACK);
         ctrl_packet.encode();
-        try {
-          ctrl_sock.send(ctrl_packet, &master_addr);
-        } catch(int e) {
+        if(ctrl_sock.send(ctrl_packet, &master_addr)) {
           rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
-          // TODO: add cleanup of RT tasks
-          ctrl_sock.close();
-          data_sock.close();
-          exit(-1);
+          terminate_interrupt = true;
+          continue;
         }
         break;
 
@@ -575,19 +578,15 @@ int main(int argc, char * const argv[]) {
               size_t ctrl_size = ctrl_packet.maxsize();
               if(ctrl_if.send(opcode, &measure_info, sizeof(measure_info), ctrl_packet.get_buffer(), &ctrl_size)) {
                 rt_syslog(ATMD_CRIT, "Failed to send message to the measurement thread.");
-                // TODO: add cleanup of RT tasks!
-                ctrl_sock.close();
-                data_sock.close();
-                exit(-1);
+                terminate_interrupt = true;
+                continue;
               }
 
               // 3) Send packet back!
               if(ctrl_sock.send(ctrl_packet, &master_addr)) {
                 rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
-                // TODO: add cleanup of RT tasks
-                ctrl_sock.close();
-                data_sock.close();
-                exit(-1);
+                terminate_interrupt = true;
+                continue;
               }
 
             } else {
@@ -597,10 +596,8 @@ int main(int argc, char * const argv[]) {
               ctrl_packet.encode();
               if(ctrl_sock.send(ctrl_packet, &master_addr)) {
                 rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
-                // TODO: add cleanup of RT tasks
-                ctrl_sock.close();
-                data_sock.close();
-                exit(-1);
+                terminate_interrupt = true;
+                continue;
               }
             }
 
@@ -617,10 +614,8 @@ int main(int argc, char * const argv[]) {
               ctrl_packet.encode();
               if(ctrl_sock.send(ctrl_packet, &master_addr)) {
                 rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
-                // TODO: add cleanup of RT tasks
-                ctrl_sock.close();
-                data_sock.close();
-                exit(-1);
+                terminate_interrupt = true;
+                continue;
               }
 
             } else {
@@ -630,10 +625,8 @@ int main(int argc, char * const argv[]) {
               ctrl_packet.encode();
               if(ctrl_sock.send(ctrl_packet, &master_addr)) {
                 rt_syslog(ATMD_CRIT, "Failed to send packet to master. Terminating.");
-                // TODO: add cleanup of RT tasks
-                ctrl_sock.close();
-                data_sock.close();
-                exit(-1);
+                terminate_interrupt = true;
+                continue;
               }
             }
             break;
@@ -647,6 +640,7 @@ int main(int argc, char * const argv[]) {
 
       default:
         // Ignore...
+        rt_syslog(ATMD_WARN, "Received a packet with unknown type (%d).", ctrl_packet.type());
         break;
     }
   }
