@@ -295,6 +295,11 @@ void VirtualBoard::control_task(void *arg) {
       continue;
   }
 
+  // Issue clear_config() command
+  pthis->clear_config();
+
+  // Set status to IDLE
+  pthis->status(ATMD_STATUS_IDLE);
 
   // Now agents are configured. We can cycle for commands on RTnet...
   while(true) {

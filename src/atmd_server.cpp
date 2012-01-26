@@ -354,6 +354,7 @@ int main(int argc, char * const argv[])
 
   // Create VirtualBoard
   VirtualBoard board(server_conf);
+  board.status(ATMD_STATUS_BOOT);
   board.init();
 
   // Now we initialize network interface

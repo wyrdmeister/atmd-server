@@ -83,6 +83,7 @@
 #define ATMD_STATUS_IDLE        0
 #define ATMD_STATUS_RUNNING     1
 #define ATMD_STATUS_ERR         2
+#define ATMD_STATUS_BOOT        3
 
 // Save file formats
 #define ATMD_FORMAT_RAW         1   // Save in a text file in raw format (stop counts and retriggers)

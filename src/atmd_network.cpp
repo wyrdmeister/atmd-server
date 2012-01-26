@@ -39,6 +39,7 @@ extern bool enable_debug;
 #define ATMD_NETERR_STAT            8
 #define ATMD_NETERR_START           9
 #define ATMD_NETERR_STOP           10
+#define ATMD_NETERR_BOOT           11
 
 static const char *network_strerror[] = {
   "NONE",
@@ -51,7 +52,8 @@ static const char *network_strerror[] = {
   "LOCK",
   "STAT",
   "START",
-  "STOP"
+  "STOP",
+  "BOOT"
 };
 
 #include "atmd_network.h"
@@ -429,6 +431,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
   // Data variables
   std::string txt;
   uint32_t val1, val2, val3;
+
+  // If board is booting we refuse to set parameters
+  if(board.status() == ATMD_STATUS_BOOT) {
+    syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting");
+    this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BOOT, network_strerror[ATMD_NETERR_BOOT]));
+  }
 
   // Configuration SET commands
   if(main_command == "SET") {
