@@ -78,9 +78,10 @@ int VirtualBoard::init() {
   }
 
   // Init the RT control socket
-  _ctrl_sock.rtskbs(_config.rtskbs());
+  _ctrl_sock.rtskbs( (_config.rtskbs() != 0) ? _config.rtskbs() : ATMD_DEF_RTSKBS );
   _ctrl_sock.protocol(ATMD_PROTO_CTRL);
-  _ctrl_sock.interface(_config.rtif());
+  _ctrl_sock.interface( (strlen(_config.rtif()) > 0) ? _config.rtif() : ATMD_DEF_RTIF );
+  _ctrl_sock.tdma_dev( (strlen(_config.tdma_dev()) > 0) ? _config.tdma_dev() : ATMD_DEF_TDMA );
   if(_ctrl_sock.init(true)) {
     syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet control socket.");
     return -1;
@@ -91,9 +92,10 @@ int VirtualBoard::init() {
 #endif
 
   // Init the RT data socket
-  _data_sock.rtskbs(_config.rtskbs());
+  _data_sock.rtskbs( (_config.rtskbs() != 0) ? _config.rtskbs() : ATMD_DEF_RTSKBS );
   _data_sock.protocol(ATMD_PROTO_DATA);
-  _data_sock.interface(_config.rtif());
+  _data_sock.interface( (strlen(_config.rtif()) > 0) ? _config.rtif() : ATMD_DEF_RTIF );
+  _data_sock.tdma_dev( (strlen(_config.tdma_dev()) > 0) ? _config.tdma_dev() : ATMD_DEF_TDMA );
   if(_data_sock.init(true)) {
     syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet data socket.");
     return -1;

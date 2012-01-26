@@ -42,7 +42,10 @@
  */
 class AtmdConfig {
 public:
-  AtmdConfig() {};
+  AtmdConfig() : _rtskbs(0) {
+    memset(_rtif, 0, IFNAMSIZ);
+    memset(_tdma_dev, 0, IFNAMSIZ);
+  };
   ~AtmdConfig() {};
 
   // Open the give file an read configuration from it
@@ -60,6 +63,9 @@ public:
   // Return the interface name
   const char * rtif()const { return _rtif; };
 
+  // Return the TDMA device name
+  const char * tdma_dev()const { return _tdma_dev; };
+
   // Clear config
   void clear() {
     agent_addr.clear();
@@ -74,6 +80,9 @@ private:
 
   // RT ethernet interface
   char _rtif[IFNAMSIZ];
+
+  // TDMA device
+  char _tdma_dev[IFNAMSIZ];
 
 };
 

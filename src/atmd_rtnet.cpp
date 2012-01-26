@@ -115,6 +115,20 @@ int RTnet::init(bool en_bind) {
 #endif
   }
 
+  // Open TDMA device
+  _tdma = rt_dev_open(_tdma_name, O_RDWR);
+  if(_tdma < 0) {
+    rt_syslog(ATMD_ERR, "RTnet [init]: cannot open device '%s'. Error: '%s'.", _tdma_name, strerror(-_tdma));
+    rt_dev_close(_sock);
+    _sock = -1;
+    return -1;
+  }
+
+#ifdef DEBUG
+if(enable_debug)
+  rt_syslog(ATMD_DEBUG, "RTnet [init]: successfully opened TDMA device '%s'.\n", _tdma_name);
+#endif
+
   return 0;
 }
 
@@ -144,6 +158,11 @@ int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
     rt_syslog(ATMD_ERR, "RTnet [send]: failed to send packet. Error: '%s'.", strerror(-retval));
     return -1;
   }
+
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "RTnet [send]: successfully sent packet with size %d to address '%s'.", retval, ether_ntoa(addr));
+#endif
 
   return 0;
 }
@@ -204,7 +223,7 @@ unsigned long RTnet::wait_tdma(unsigned long cycle) {
     else if(curr == cycle)
       break;
     else {
-      rt_syslog(ATMD_ERR, "RTnet [recv]: tried to sync on a TDMA cycle in the past.");
+      rt_syslog(ATMD_ERR, "RTnet [wait_tdma]: tried to sync on a TDMA cycle in the past.");
       break;
     }
   }
@@ -220,9 +239,9 @@ unsigned long RTnet::wait_tdma() {
   waitinfo.type = TDMA_WAIT_ON_SYNC;
   waitinfo.size = sizeof(waitinfo);
 
-  int retval = rt_dev_ioctl(_sock, RTMAC_RTIOC_WAITONCYCLE_EX, &waitinfo);
+  int retval = rt_dev_ioctl(_tdma, RTMAC_RTIOC_WAITONCYCLE_EX, &waitinfo);
   if(retval) {
-    rt_syslog(ATMD_ERR, "RTnet [wait_tdma]: error in IOCTL waiting for TMDA sync. Error: %s.", strerror(-retval));
+    rt_syslog(ATMD_ERR, "RTnet [wait_tdma]: error in IOCTL waiting for TDMA sync. Error: %s.", strerror(-retval));
     return 0;
 
   } else {

@@ -127,6 +127,19 @@ int AtmdConfig::read(const std::string& filename) {
         _rtif[IFNAMSIZ-1] = '\0';
         continue;
       }
+
+      // TDMA device
+      conf_re = "^tdma ([a-zA-Z0-9]*)";
+      if(conf_re.PartialMatch(line, &txt)) {
+        #ifdef DEBUG
+        if(enable_debug)
+          syslog(ATMD_DEBUG, "Config [read]: configured TDMA device as '%s'.", txt.c_str());
+        #endif
+          strncpy(_tdma_dev, txt.c_str(), IFNAMSIZ);
+          _tdma_dev[IFNAMSIZ-1] = '\0';
+          continue;
+      }
+
     } else {
       continue;
     }
