@@ -75,7 +75,7 @@ public:
   const char* interface()const { return _ifname; };
 
   // Configure TDMA device
-  void tdma_dev(const char* name) { strncpy(_tdma_name, name, IFNAMSIZ); _ifname[IFNAMSIZ-1] = '\0'; };
+  void tdma_dev(const char* name) { strncpy(_tdma_name, name, IFNAMSIZ); _tdma_name[IFNAMSIZ-1] = '\0'; };
   const char* tdma_dev()const { return _tdma_name; };
 
   // Configure protocol

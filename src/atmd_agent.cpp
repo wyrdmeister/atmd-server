@@ -311,7 +311,7 @@ int main(int argc, char * const argv[]) {
   ctrl_sock.rtskbs( (server_conf.rtskbs() > 0) ? server_conf.rtskbs() : ATMD_DEF_RTSKBS );
   ctrl_sock.protocol(ATMD_PROTO_CTRL);
   ctrl_sock.interface( (strlen(server_conf.rtif()) > 0) ? server_conf.rtif() : ATMD_DEF_RTIF );
-  ctrl_sock.tdma_dev( (strlen(server_conf.tdma_dev()) > 0) ? server_conf.tdma_dev() : ATMD_DEF_RTIF );
+  ctrl_sock.tdma_dev( (strlen(server_conf.tdma_dev()) > 0) ? server_conf.tdma_dev() : ATMD_DEF_TDMA );
 
   if(ctrl_sock.init(true)) {
     rt_syslog(ATMD_CRIT, "Failed to initialize RTnet control socket. Terminating.");
@@ -390,7 +390,7 @@ int main(int argc, char * const argv[]) {
   data_sock.rtskbs( (server_conf.rtskbs() > 0) ? server_conf.rtskbs() : ATMD_DEF_RTSKBS );
   data_sock.protocol(ATMD_PROTO_DATA);
   data_sock.interface( (strlen(server_conf.rtif()) > 0) ? server_conf.rtif() : ATMD_DEF_RTIF );
-  data_sock.tdma_dev( (strlen(server_conf.tdma_dev()) > 0) ? server_conf.tdma_dev() : ATMD_DEF_RTIF );
+  data_sock.tdma_dev( (strlen(server_conf.tdma_dev()) > 0) ? server_conf.tdma_dev() : ATMD_DEF_TDMA );
   if(data_sock.init()) {
     rt_syslog(ATMD_CRIT, "Failed to initialize RTnet data socket. Terminating.");
     ctrl_sock.close();
