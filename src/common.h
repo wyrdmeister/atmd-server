@@ -43,7 +43,11 @@
 #define ATMD_DEF_HSDIV  183
 
 // Default PID file
-#define ATMD_PID_FILE "/var/run/atmd_server.pid"
+#ifdef ATMD_SERVER
+  #define ATMD_PID_FILE "/var/run/atmd_server.pid"
+#else
+  #define ATMD_PID_FILE "/var/run/atmd_agent.pid"
+#endif
 
 // Default confiugration file
 #define ATMD_CONF_FILE "/etc/atmd_server.conf"
