@@ -136,8 +136,14 @@ void atmd_measure(void *arg) {
     }
 
 #ifdef DEBUG
-    if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: starting measurement. Window: %.0f us. Total time: %.3f s.", meas_info.window_time()/1e3, meas_info.measure_time()/1e9);
+    if(enable_debug) {
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: starting measurement.");
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure window: %.0f us.", meas_info.window_time()/1e3);
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure time: %.0f us.", meas_info.measure_time()/1e3);
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure deadtime: %.0f us.", meas_info.deadtime()/1e3);
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure timeout: %.0f us.", meas_info.timeout()/1e3);
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: TDMA cycle: %u.", meas_info.tdma_cycle());
+    }
 #endif
 
     // Starting measure
