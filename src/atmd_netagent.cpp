@@ -296,21 +296,18 @@ int AgentMsg::encode() {
       offset++;
       *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _deadtime;
       offset += sizeof(uint64_t);
-      break;
 
       // 9) start_offset -> UINT32
       *(_buffer+offset) = ATMD_TYPE_UINT32;
       offset++;
       *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _start_offset;
       offset += sizeof(uint32_t);
-      break;
 
       // 10) refclk -> UINT16
       *(_buffer+offset) = ATMD_TYPE_UINT16;
       offset++;
       *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _refclk;
       offset += sizeof(uint16_t);
-      break;
 
       // 11) hsdiv -> UINT16
       *(_buffer+offset) = ATMD_TYPE_UINT16;
