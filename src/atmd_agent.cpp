@@ -517,7 +517,10 @@ int main(int argc, char * const argv[]) {
     }
 
     // Decode packet
-    ctrl_packet.decode();
+    if(ctrl_packet.decode()) {
+      rt_syslog(ATMD_ERR, "The received packet failed to decode.");
+      continue;
+    }
 
     // Act based on packet type
     switch(ctrl_packet.type()) {
@@ -530,6 +533,10 @@ int main(int argc, char * const argv[]) {
         break;
 
       case ATMD_CMD_MEAS_SET:
+#ifdef DEBUG
+        if(enable_debug)
+          rt_syslog(ATMD_DEBUG, "Received a measurement settings packet from master.");
+#endif
         // Store configuration into board
         // Init measure
         board.start_rising(ctrl_packet.start_rising());
@@ -553,8 +560,14 @@ int main(int argc, char * const argv[]) {
           // PLL not locked. Abort measure
           board.status(ATMD_STATUS_ERR);
           ctrl_packet.type(ATMD_CMD_ERROR);
+          rt_syslog(ATMD_ERR, "Failed to configure board.");
+
         } else {
           ctrl_packet.type(ATMD_CMD_ACK);
+#ifdef DEBUG
+          if(enable_debug)
+            rt_syslog(ATMD_DEBUG, "Board correctly configured.");
+#endif
         }
 
         // Send back ACK
@@ -569,6 +582,10 @@ int main(int argc, char * const argv[]) {
       case ATMD_CMD_MEAS_CTR:
         switch(ctrl_packet.action()) {
           case ATMD_ACTION_START:
+#ifdef DEBUG
+            if(enable_debug)
+              rt_syslog(ATMD_DEBUG, "Received a measure control packet. Starting measurement.");
+#endif
             // Start a new measurement
             if(board.status() == ATMD_STATUS_IDLE) {
 

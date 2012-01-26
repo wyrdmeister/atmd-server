@@ -111,6 +111,7 @@ void atmd_measure(void *arg) {
     }
 
     if(opcode != ATMD_ACTION_START) {
+      rt_syslog(ATMD_ERR, "Measure [atmd_measure]: received an unexpected opcode.");
       // Error
       sys->board->status(ATMD_STATUS_ERR);
       ctrl_packet.clear();
