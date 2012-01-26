@@ -410,7 +410,7 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
         _type = ATMD_DT_LAST;
       break;
     } else {
-      if(offset+sizeof(int8_t)+sizeof(int32_t)+sizeof(uint32_t) >= ATMD_PACKET_SIZE)
+      if(offset+ATMD_EV_SIZE >= ATMD_PACKET_SIZE)
         break;
     }
   }
@@ -480,6 +480,7 @@ int DataMsg::decode() {
     _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
     offset += sizeof(uint64_t);
 
+    _size = offset;
     return 0;
   }
 
@@ -516,6 +517,9 @@ int DataMsg::decode() {
       rt_syslog(ATMD_ERR, "NetAgent [DataMsg::decode]: trying to decode an unknown message type.");
       return -1;
   }
+
+  // Setup size
+  _size = offset + _numev * ATMD_EV_SIZE;
 
   return 0;
 }

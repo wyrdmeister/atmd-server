@@ -611,6 +611,9 @@ void VirtualBoard::rt_data_task(void *arg) {
     // The packet comes from a valid agent
     if(good_agent) {
 
+      // Decode packet
+      packet.decode();
+
       // Allocate QUEUE buffer
       char msg[ATMD_PACKET_SIZE + sizeof(size_t)];
 
