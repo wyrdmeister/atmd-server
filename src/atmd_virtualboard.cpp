@@ -1518,8 +1518,9 @@ int VirtualBoard::stop_measure() {
   packet.clear();
   packet.type(ATMD_CMD_MEAS_CTR);
   packet.action(ATMD_ACTION_STOP);
+  packet.encode();
   if(send_command(opcode, packet)) {
-    syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
+    syslog(ATMD_CRIT, "VirtualBoard [stop_measure]: failed to send a control command.");
     // Terminate server
     terminate_interrupt = true;
     return -1;
@@ -1531,18 +1532,12 @@ int VirtualBoard::stop_measure() {
     return 0;
 
   if(packet.type() == ATMD_CMD_ERROR) {
-    syslog(ATMD_ERR, "VirtualBoard [start_measure]: error sending start command.");
+    syslog(ATMD_ERR, "VirtualBoard [stop_measure]: error sending stop command.");
     _status = ATMD_STATUS_ERR;
     return -1;
   }
 
-  if(packet.type() == ATMD_CMD_BUSY) {
-    syslog(ATMD_ERR, "VirtualBoard [start_measure]: agents where busy while sending start command.");
-    _status = ATMD_STATUS_ERR;
-    return -1;
-  }
-
-  syslog(ATMD_ERR, "VirtualBoard [start_measure]: got bad answer type while sending start command.");
+  syslog(ATMD_ERR, "VirtualBoard [stop_measure]: got bad answer type while sending stop command.");
   _status = ATMD_STATUS_ERR;
   return -1;
 }

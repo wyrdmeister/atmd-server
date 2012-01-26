@@ -51,6 +51,7 @@ int RTcomm::send(int& opcode, const void* buffer, size_t buff_size, void * answe
   // Copy message
   memcpy(_send_buff, buffer, buff_size);
   _send.size = buff_size;
+  _send.opcode = opcode;
 
   // Send message
   int retval = rt_task_send(_task, &_send, (answer != NULL) ? &_recv : NULL, TM_INFINITE);
