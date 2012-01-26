@@ -147,7 +147,7 @@ int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
   struct sockaddr_ll remote_addr;
   memset(&remote_addr, 0, sizeof(struct sockaddr_ll));
   remote_addr.sll_family = AF_PACKET;
-  remote_addr.sll_protocol = _protocol;
+  remote_addr.sll_protocol = htons(_protocol);
   remote_addr.sll_ifindex = _if_id;
   remote_addr.sll_halen = sizeof(struct ether_addr);
   memcpy(&remote_addr.sll_addr, addr, sizeof(struct ether_addr));
@@ -155,7 +155,7 @@ int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
   // Send message
   int retval = rt_dev_sendto(_sock, packet.get_buffer(), (packet.size() > 46) ? packet.size() : 46, 0, (struct sockaddr*)&remote_addr, sizeof(struct sockaddr_ll));
   if(retval < 0) {
-    rt_syslog(ATMD_ERR, "RTnet [send]: failed to send packet. Error: '%s'.", strerror(-retval));
+    rt_syslog(ATMD_ERR, "RTnet [send]: failed to send packet with size %d bytes. Error: '%s'.", packet.size(), strerror(-retval));
     return -1;
   }
 

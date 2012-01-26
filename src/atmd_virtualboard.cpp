@@ -563,6 +563,11 @@ void VirtualBoard::rt_data_task(void *arg) {
       return;
     }
 
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "VirtualBoard [rt_data_task]: got data message from agent '%s'.", ether_ntoa(&remote_addr));
+#endif
+
     // Check address
     bool good_agent = false;
     size_t agent_id = 0;
@@ -590,6 +595,9 @@ void VirtualBoard::rt_data_task(void *arg) {
         terminate_interrupt = true;
         break;
       }
+
+    } else {
+      rt_syslog(ATMD_ERR, "VirtualBoard [rt_data_task]: got data message from invalid agent '%s'.", ether_ntoa(&remote_addr));
     }
   }
 }
