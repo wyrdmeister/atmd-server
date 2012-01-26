@@ -163,8 +163,8 @@ public:
   uint16_t action()const { return _action; };
 
   // TDMA cycle for synchronization
-  void tdma_cycle(uint32_t val) { _tdma_cycle = val; };
-  uint32_t tdma_cycle()const { return _tdma_cycle; };
+  void tdma_cycle(uint64_t val) { _tdma_cycle = val; };
+  uint64_t tdma_cycle()const { return _tdma_cycle; };
 
   // Clear operator
   void clear() {
@@ -210,7 +210,7 @@ private:
   uint16_t _action;
 
   // TDMA cycle
-  uint32_t _tdma_cycle;
+  uint64_t _tdma_cycle;
 };
 
 

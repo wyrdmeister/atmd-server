@@ -104,10 +104,10 @@ public:
   };
 
   // Wait for a TDMA cycle
-  unsigned long wait_tdma(unsigned long cycle);
+  uint64_t wait_tdma(uint64_t cycle);
 
   // Wait on TDMA sync
-  unsigned long wait_tdma();
+  uint64_t wait_tdma();
 
 private:
   // Socket

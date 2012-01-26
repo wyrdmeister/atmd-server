@@ -179,7 +179,6 @@ int AgentMsg::decode() {
       }
       _hsdiv = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
       offset += sizeof(uint16_t);
-
       break;
 
     case ATMD_CMD_MEAS_CTR:
@@ -195,11 +194,12 @@ int AgentMsg::decode() {
 
       // 2) TDMA cycle
       val_type = *(_buffer+offset);
-      if(val_type != ATMD_TYPE_UINT32) {
+      if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR tdma_cycle argument has wrong type.");
         return -1;
       }
-      _tdma_cycle = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
+      _tdma_cycle = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
+      _offset += sizeof(uint64_t);
       break;
 
     case ATMD_CMD_ACK:
@@ -326,10 +326,10 @@ int AgentMsg::encode() {
       offset += sizeof(uint16_t);
 
       // 2) TDMA cycle
-      *(_buffer+offset) = ATMD_TYPE_UINT32;
+      *(_buffer+offset) = ATMD_TYPE_UINT64;
       offset++;
-      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _tdma_cycle;
-      offset += sizeof(uint32_t);
+      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _tdma_cycle;
+      offset += sizeof(uint64_t);
       break;
 
     case ATMD_CMD_ACK:

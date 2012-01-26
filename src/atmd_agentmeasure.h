@@ -85,8 +85,8 @@ public:
   RTIME deadtime() { return _deadtime; };
 
   // TDMA cycle
-  void tdma_cycle(uint32_t val) { _tdma_cycle = val; };
-  uint32_t tdma_cycle()const { return _tdma_cycle; };
+  void tdma_cycle(uint64_t val) { _tdma_cycle = val; };
+  uint64_t tdma_cycle()const { return _tdma_cycle; };
 
 private:
   // Timings
@@ -96,7 +96,7 @@ private:
   RTIME _deadtime;
 
   // TDMA cycle
-  uint32_t _tdma_cycle;
+  uint64_t _tdma_cycle;
 };
 
 

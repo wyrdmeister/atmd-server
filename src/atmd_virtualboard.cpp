@@ -330,10 +330,10 @@ void VirtualBoard::control_task(void *arg) {
 
     if(packet.type() == ATMD_CMD_MEAS_CTR) {
       // A control message should be sent as a broadcast and synchronized with TDMA
-      uint32_t cycle = pthis->ctrl_sock().wait_tdma();
+      uint64_t cycle = pthis->ctrl_sock().wait_tdma();
 #ifdef DEBUG
       if(enable_debug)
-        rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: sync on TDMA cycle %ld.", cycle);
+        rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: sync on TDMA cycle %lu.", cycle);
 #endif
       packet.tdma_cycle(cycle);
       packet.encode();

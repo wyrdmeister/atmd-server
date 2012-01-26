@@ -208,11 +208,11 @@ int RTnet::recv(GenMsg& packet, struct ether_addr* addr)const {
 }
 
 
-/* @fn unsigned long RTnet::wait_tdma(unsigned long cycle)
+/* @fn uint64_t RTnet::wait_tdma(uint64_t cycle)
  * Wait for a specific TDMA cycle
  */
-unsigned long RTnet::wait_tdma(unsigned long cycle) {
-  unsigned long curr = 0;
+uint64_t RTnet::wait_tdma(uint64_t cycle) {
+  uint64_t curr = 0;
   while(true) {
     curr = wait_tdma();
     if(curr == 0)
@@ -231,10 +231,10 @@ unsigned long RTnet::wait_tdma(unsigned long cycle) {
 }
 
 
-/* @fn unsigned long RTnet::wait_tdma()
+/* @fn uint64_t RTnet::wait_tdma()
  * Wait for next TDMA cycle
  */
-unsigned long RTnet::wait_tdma() {
+uint64_t RTnet::wait_tdma() {
   struct rtmac_waitinfo waitinfo;
   waitinfo.type = TDMA_WAIT_ON_SYNC;
   waitinfo.size = sizeof(waitinfo);
@@ -245,6 +245,6 @@ unsigned long RTnet::wait_tdma() {
     return 0;
 
   } else {
-    return waitinfo.cycle_no;
+    return (uint64_t)waitinfo.cycle_no;
   }
 }
