@@ -508,7 +508,7 @@ int main(int argc, char * const argv[]) {
     }
 
     // Verify sender (if it's not our master we should ignore the packet)
-    if(!memcmp(&remote_addr, &master_addr, sizeof(struct ether_addr))) {
+    if(memcmp(&remote_addr, &master_addr, sizeof(struct ether_addr)) != 0) {
       // Bad address
       rt_syslog(ATMD_WARN, "Received a control packet from an unknown master. Address was '%s'.", ether_ntoa(&remote_addr));
       continue;
