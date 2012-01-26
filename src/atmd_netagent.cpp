@@ -194,6 +194,7 @@ int AgentMsg::decode() {
 
       // 2) TDMA cycle
       val_type = *(_buffer+offset);
+      offset++;
       if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR tdma_cycle argument has wrong type.");
         return -1;
