@@ -585,6 +585,7 @@ void VirtualBoard::rt_data_task(void *arg) {
     }
 
     // Get a packet
+    packet.clear();
     if(pthis->data_sock().recv(packet, &remote_addr)) {
       rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: failed to receive a packet over RTnet socket.");
       // Terminate server
@@ -611,17 +612,14 @@ void VirtualBoard::rt_data_task(void *arg) {
     // The packet comes from a valid agent
     if(good_agent) {
 
-      // Decode packet
-      packet.decode();
-
       // Allocate QUEUE buffer
       char msg[ATMD_PACKET_SIZE + sizeof(size_t)];
 
       // Translate packet buffer to queue message (it just correnct the channels based on agent id)
       *( static_cast<size_t*>( static_cast<void*>(msg) ) ) = agent_id;
-      memcpy((void*)(msg+sizeof(size_t)), packet.get_buffer(), packet.size());
+      memcpy((void*)(msg+sizeof(size_t)), packet.get_buffer(), ATMD_PACKET_SIZE);
 
-      if(pthis->data_queue().send(msg, sizeof(size_t)+packet.size())) {
+      if(pthis->data_queue().send(msg, sizeof(size_t)+ATMD_PACKET_SIZE)) {
         rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: failed to send packet to the data queue.");
         // Terminate server
         terminate_interrupt = true;
@@ -745,7 +743,7 @@ void VirtualBoard::data_task(void *arg) {
 
     bool measure_end = true;
     for(size_t i = 0; i < agent_end.size(); i++)
-      measure_end &= agent_end[i];
+      measure_end = measure_end && agent_end[i];
 
 
     // If measure is NULL, create one
