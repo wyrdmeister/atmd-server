@@ -410,7 +410,7 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
         _type = ATMD_DT_LAST;
       break;
     } else {
-      if(offset >= ATMD_PACKET_SIZE)
+      if(offset+sizeof(int8_t)+sizeof(int32_t)+sizeof(uint32_t) >= ATMD_PACKET_SIZE)
         break;
     }
   }
