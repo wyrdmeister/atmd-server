@@ -199,7 +199,7 @@ int AgentMsg::decode() {
         return -1;
       }
       _tdma_cycle = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      _offset += sizeof(uint64_t);
+      offset += sizeof(uint64_t);
       break;
 
     case ATMD_CMD_ACK:
