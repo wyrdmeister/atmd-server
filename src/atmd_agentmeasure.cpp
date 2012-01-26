@@ -137,7 +137,7 @@ void atmd_measure(void *arg) {
 
 #ifdef DEBUG
     if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: starting measurement.");
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: starting measurement. Window: %.0f us. Total time: %.3f s.", meas_info.window_time()/1e3, meas_info.measure_time()/1e9);
 #endif
 
     // Starting measure
@@ -164,7 +164,7 @@ void atmd_measure(void *arg) {
 
 #ifdef DEBUG
     if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully got sync to TDMA starting measure. Window: %.0f us. Total time: %.3f s.", meas_info.window_time()/1e3, meas_info.measure_time()/1e9);
+      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully got sync to TDMA.");
 #endif
 
     // Start measure cycle

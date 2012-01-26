@@ -71,6 +71,9 @@ public:
  */
 class MeasureDef {
 public:
+  MeasureDef() : _measure_time(0), _window_time(0), _timeout(0), _deadtime(0), _tdma_cycle(0) {};
+  ~MeasureDef() {};
+
   // Manage timings
   void measure_time(RTIME time) { _measure_time = time; };
   RTIME measure_time() { return _measure_time; };
