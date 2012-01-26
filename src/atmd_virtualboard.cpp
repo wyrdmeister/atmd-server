@@ -300,6 +300,14 @@ void VirtualBoard::control_task(void *arg) {
   // Issue clear_config() command
   pthis->clear_config();
 
+  // Resume data threads
+  if(pthis->unlock_threads()) {
+    rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads.");
+    // Terminate server
+    terminate_interrupt = true;
+    return;
+  }
+
   // Set status to IDLE
   pthis->status(ATMD_STATUS_IDLE);
 
@@ -547,6 +555,27 @@ void VirtualBoard::rt_data_task(void *arg) {
   DataMsg packet;
   struct ether_addr remote_addr;
 
+  // We stop and wait for the agent setup to complete
+  int retval = rt_task_suspend(NULL);
+  if(retval) {
+    switch(retval) {
+      case -EINTR:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: rt_task_suspend() failed because the thread received a signal.");
+        break;
+
+      case -EPERM:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: rt_task_suspend() failed because called from an invalid context.");
+        break;
+
+      default:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: rt_task_suspend() failed with an unexpected return code (%d).", retval);
+        break;
+    }
+    // Terminate
+    terminate_interrupt = true;
+    return;
+  }
+
   while(true) {
 
     // Check termination interrupt
@@ -630,6 +659,27 @@ void VirtualBoard::data_task(void *arg) {
 
   // Vector of current start ID
   std::vector<uint32_t> curr_start_id;
+
+  // We stop and wait for the agent setup to complete
+  retval = rt_task_suspend(NULL);
+  if(retval) {
+    switch(retval) {
+      case -EINTR:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: rt_task_suspend() failed because the thread received a signal.");
+        break;
+
+      case -EPERM:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: rt_task_suspend() failed because called from an invalid context.");
+        break;
+
+      default:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: rt_task_suspend() failed with an unexpected return code (%d).", retval);
+        break;
+    }
+    // Terminate
+    terminate_interrupt = true;
+    return;
+  }
 
   // Init vectors
   for(size_t i = 0; i < pthis->agents(); i++) {

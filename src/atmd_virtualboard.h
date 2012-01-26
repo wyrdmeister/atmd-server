@@ -122,6 +122,15 @@ public:
   // Non-RT data thread code
   static void data_task(void *arg);
 
+  // Unlock data threads
+  int unlock_threads() {
+    if(rt_task_resume(&_rt_data_task))
+      return -1;
+    if(rt_task_resume(&_data_task))
+      return -1;
+    return 0;
+  };
+
   // == Configuration ==
 
   // Clear configuration
