@@ -106,7 +106,7 @@ int RTqueue::send(const char *buffer, size_t buff_size) {
 
 #ifdef DEBUG
   if(enable_debug)
-    rt_syslog(ATMD_DEBUG, "RTqueue [send]: successfully sent packet to queue with size '%d'", retval);
+    rt_syslog(ATMD_DEBUG, "RTqueue [send]: successfully sent packet to queue with size '%d'", buff_size);
 #endif
 
   return 0;
@@ -141,7 +141,7 @@ int RTqueue::recv(char * buffer, size_t& buff_size) {
         break;
 
       default:
-        rt_syslog(ATMD_CRIT, "RTqueue [recv]: rt_queue_receive() failed. ");
+        rt_syslog(ATMD_CRIT, "RTqueue [recv]: rt_queue_receive() failed with unexpected return code (%d).", retval);
         break;
     }
     return -1;
@@ -164,6 +164,6 @@ int RTqueue::recv(char * buffer, size_t& buff_size) {
 
   // Free message
   rt_queue_free(&_descriptor, msg);
-  
+
   return 0;
 }

@@ -612,14 +612,17 @@ void VirtualBoard::rt_data_task(void *arg) {
     // The packet comes from a valid agent
     if(good_agent) {
 
+      // Decode packet to update size
+      packet.decode();
+
       // Allocate QUEUE buffer
-      char msg[ATMD_PACKET_SIZE + sizeof(size_t)];
+      char msg[ATMD_PACKET_SIZE+sizeof(size_t)];
 
       // Translate packet buffer to queue message (it just correnct the channels based on agent id)
-      *( static_cast<size_t*>( static_cast<void*>(msg) ) ) = agent_id;
-      memcpy((void*)(msg+sizeof(size_t)), packet.get_buffer(), ATMD_PACKET_SIZE);
+      memcpy(msg, (void*)&agent_id, sizeof(size_t));
+      memcpy(msg+sizeof(size_t), packet.get_buffer(), packet.size());
 
-      if(pthis->data_queue().send(msg, sizeof(size_t)+ATMD_PACKET_SIZE)) {
+      if(pthis->data_queue().send(msg, sizeof(size_t)+packet.size())) {
         rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: failed to send packet to the data queue.");
         // Terminate server
         terminate_interrupt = true;
@@ -716,35 +719,19 @@ void VirtualBoard::data_task(void *arg) {
     }
 
     // Translate the message back to a packet
-    size_t agent_id = *( static_cast<size_t*>( static_cast<void*>(msg) ) );
-    memcpy(packet.get_buffer(), (void*)(msg+sizeof(size_t)), msg_size-sizeof(size_t));
+    size_t agent_id = 0;
+    memcpy((void*)&agent_id, msg, sizeof(size_t));
+    memcpy(packet.get_buffer(), msg+sizeof(size_t), msg_size-sizeof(size_t));
     packet.decode();
 
 
     // === START PACKET ASSEMBLING ===
-
-
-    // If packet type is ATMD_DT_TERM, the measure has ended (at least for the current agent)
-    if(packet.type() == ATMD_DT_TERM) {
-      agent_end[agent_id] = true;
-      if(curr_measure) {
-        curr_measure->add_time(packet.window_start(), packet.window_time());
-      } else {
-        syslog(ATMD_ERR, "VirtualBoard [data_task]: received measure terminated packet, but current measure pointer in NULL.");
-      }
-      continue;
-    }
 
     if(agent_end[agent_id]) {
       // We should not recive other packets from this agent!
       syslog(ATMD_ERR, "VirtualBoard [data_task]: received a packet from an agent that has terminated its measure. Something is wrong!");
       continue;
     }
-
-    bool measure_end = true;
-    for(size_t i = 0; i < agent_end.size(); i++)
-      measure_end = measure_end && agent_end[i];
-
 
     // If measure is NULL, create one
     if(curr_measure == NULL) {
@@ -754,176 +741,220 @@ void VirtualBoard::data_task(void *arg) {
         curr_start_id[i] = 0;
     }
 
-
-    if(measure_end && pthis->get_autosave() == 0) {
-
-      // == Add measure to storage ==
-      // Lock measures object
-      retval = pthis->acquire_lock();
-      if(retval) {
-        switch(retval) {
-          case -EINVAL:
-          case -EIDRM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
-            break;
-
-          case -EINTR:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
-            break;
-
-          case -EPERM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
-            break;
-
-          default:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
-            break;
-        }
-
-        // Terminate server
-        terminate_interrupt = true;
-        return;
-      }
-
-      // Add measure
-      pthis->add_measure(curr_measure);
-      curr_measure = NULL;
-
-      // Release lock of measure object
-      retval = pthis->release_lock();
-      if(retval) {
-        switch(retval) {
-          case -EINVAL:
-          case -EIDRM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
-            break;
-
-          case -EPERM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
-            break;
-
-          default:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
-            break;
-        }
-
-        // Terminate server
-        terminate_interrupt = true;
-        return;
+    // If packet type is ATMD_DT_TERM, the measure has ended (at least for the current agent)
+    if(packet.type() == ATMD_DT_TERM) {
+      agent_end[agent_id] = true;
+      if(curr_measure) {
+#ifdef DEBUG
+        if(enable_debug)
+          syslog(ATMD_DEBUG, "VirtualBoard [data_task]: received termination packet. Total measure time was: %.3f s.", packet.window_time()/1e9);
+#endif
+        curr_measure->add_time(packet.window_start(), packet.window_time());
+      } else {
+        syslog(ATMD_ERR, "VirtualBoard [data_task]: received measure terminated packet, but current measure pointer in NULL.");
       }
     }
 
+    // Check if we are done
+    bool measure_end = true;
+    for(size_t i = 0; i < agent_end.size(); i++)
+      measure_end = measure_end && agent_end[i];
 
-    // Handle autosave
-    if(pthis->get_autosave() != 0 && curr_measure->count_starts() != 0 && (curr_measure->count_starts() == pthis->get_autosave() || measure_end)) {
 
-      // == Autosave measure ==
-      // Lock measures object
-      retval = pthis->acquire_lock();
-      if(retval) {
-        switch(retval) {
-          case -EINVAL:
-          case -EIDRM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
-            break;
+    if(pthis->get_autosave() == 0) {
+      // No autosave
 
-          case -EINTR:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
-            break;
+      if(measure_end) {
 
-          case -EPERM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
-            break;
+        if(curr_measure && curr_measure->count_starts() > 0) {
 
-          default:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
-            break;
+          // == Add measure to storage ==
+          // Lock measures object
+          retval = pthis->acquire_lock();
+          if(retval) {
+            switch(retval) {
+              case -EINVAL:
+              case -EIDRM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
+                break;
+
+              case -EINTR:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
+                break;
+
+              case -EPERM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
+                break;
+
+              default:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
+                break;
+            }
+
+            // Terminate server
+            terminate_interrupt = true;
+            return;
+          }
+
+          // Add measure
+          pthis->add_measure(curr_measure);
+          curr_measure = NULL;
+
+          // Release lock of measure object
+          retval = pthis->release_lock();
+          if(retval) {
+            switch(retval) {
+              case -EINVAL:
+              case -EIDRM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
+                break;
+
+              case -EPERM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
+                break;
+
+              default:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
+                break;
+            }
+
+            // Terminate server
+            terminate_interrupt = true;
+            return;
+          }
+
+        } else {
+          // No starts or curr_measure was NULL
+          syslog(ATMD_WARN, "VirtualBoard [data_task]: measure ended but was empty.");
         }
 
-        // Terminate server
-        terminate_interrupt = true;
-        return;
-      }
-
-      // Set measure times
-      for(size_t i = 0; i < pthis->agents(); i++) {
-        uint64_t measure_begin = 0;
-        uint64_t measure_time = 0;
-        if(curr_measure->get_start(0)->times() > i)
-          measure_begin = curr_measure->get_start(0)->get_window_begin(i);
-        if(curr_measure->get_start(curr_measure->count_starts()-1)->times() > i)
-          measure_time = curr_measure->get_start(curr_measure->count_starts()-1)->get_window_begin(i) +
-                         curr_measure->get_start(curr_measure->count_starts()-1)->get_window_time(i) - measure_begin;
-        curr_measure->add_time(measure_begin, measure_time);
-      }
-
-      // Add measure
-      pthis->add_measure(curr_measure);
-      if(!measure_end) {
-        curr_measure = new Measure;
-      } else {
-        curr_measure = NULL;
         // Reset end flags
         for(size_t i = 0; i < pthis->agents(); i++)
           agent_end[i] = false;
-        // Set board status to IDLE
+
+        // Reset board status
         pthis->status(ATMD_STATUS_IDLE);
+        continue;
       }
 
-      // We format the filename
-      std::stringstream file_number(std::stringstream::out);
-      file_number.width(4);
-      file_number.fill('0');
-      file_number << pthis->get_counter(); // TODO implement counter
-      std::string filename = pthis->get_prefix() + "_" + file_number.str();
-      pthis->increment_counter();
+    } else {
+      // Autosave mode
 
-      // Save measure
-      if(pthis->save_measure(pthis->measures()-1, filename)) {
-        // TODO: handle errors
-      }
+      if(curr_measure && curr_measure->count_starts() > 0) {
 
-      // Delete last measure
-      if(pthis->delete_measure(pthis->measures()-1)) {
-        // TODO: handle errors
-      }
+        if(curr_measure->count_starts() == pthis->get_autosave() || measure_end) {
 
-      // Release lock of measure object
-      retval = pthis->release_lock();
-      if(retval) {
-        switch(retval) {
-          case -EINVAL:
-          case -EIDRM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
-            break;
+          // == Autosave measure ==
+          // Lock measures object
+          retval = pthis->acquire_lock();
+          if(retval) {
+            switch(retval) {
+              case -EINVAL:
+              case -EIDRM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
+                break;
 
-          case -EPERM:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
-            break;
+              case -EINTR:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
+                break;
 
-          default:
-            syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
-            break;
+              case -EPERM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
+                break;
+
+              default:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
+                break;
+            }
+
+            // Terminate server
+            terminate_interrupt = true;
+            return;
+          }
+
+          // Set measure times
+          for(size_t i = 0; i < pthis->agents(); i++) {
+            uint64_t measure_begin = 0;
+            uint64_t measure_time = 0;
+            if(curr_measure->get_start(0)->times() > i)
+              measure_begin = curr_measure->get_start(0)->get_window_begin(i);
+            if(curr_measure->get_start(curr_measure->count_starts()-1)->times() > i)
+              measure_time = curr_measure->get_start(curr_measure->count_starts()-1)->get_window_begin(i) +
+                            curr_measure->get_start(curr_measure->count_starts()-1)->get_window_time(i) - measure_begin;
+            curr_measure->add_time(measure_begin, measure_time);
+          }
+
+          // Add measure
+          pthis->add_measure(curr_measure);
+          if(!measure_end) {
+            curr_measure = new Measure;
+          } else {
+            curr_measure = NULL;
+            // Reset end flags
+            for(size_t i = 0; i < pthis->agents(); i++)
+              agent_end[i] = false;
+            // Set board status to IDLE
+            pthis->status(ATMD_STATUS_IDLE);
+          }
+
+          // We format the filename
+          std::stringstream file_number(std::stringstream::out);
+          file_number.width(4);
+          file_number.fill('0');
+          file_number << pthis->get_counter();
+          std::string filename = pthis->get_prefix() + "_" + file_number.str();
+          pthis->increment_counter();
+
+          // Save measure
+          if(pthis->save_measure(pthis->measures()-1, filename)) {
+            syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_save() in autosave mode failed.");
+            // TODO: handle errors
+          }
+
+          // Delete last measure
+          if(pthis->delete_measure(pthis->measures()-1)) {
+            syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_delete() in autosave mode failed.");
+            // TODO: handle errors
+          }
+
+          // Release lock of measure object
+          retval = pthis->release_lock();
+          if(retval) {
+            switch(retval) {
+              case -EINVAL:
+              case -EIDRM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
+                break;
+
+              case -EPERM:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
+                break;
+
+              default:
+                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
+                break;
+            }
+
+            // Terminate server
+            terminate_interrupt = true;
+            return;
+          }
+
+          if(measure_end) {
+            // Reset end flags
+            for(size_t i = 0; i < pthis->agents(); i++)
+              agent_end[i] = false;
+
+            // Set status
+            pthis->status(ATMD_STATUS_IDLE);
+
+            // Reset measure counter
+            pthis->reset_counter();
+
+            continue;
+          }
         }
-
-        // Terminate server
-        terminate_interrupt = true;
-        return;
       }
-    }
-
-    if(measure_end) {
-      // Reset end flags
-      for(size_t i = 0; i < pthis->agents(); i++)
-        agent_end[i] = false;
-
-      // Set status
-      pthis->status(ATMD_STATUS_IDLE);
-
-      // Reset measure counter
-      pthis->reset_counter();
-
-      continue;
     }
 
     // If current start is NULL, create one
