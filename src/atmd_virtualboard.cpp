@@ -643,6 +643,10 @@ void VirtualBoard::data_task(void *arg) {
 
   int retval = 0;
 
+  // Init rt_printf and rt_syslog
+  rt_print_auto_init(1);
+  rt_syslog(ATMD_INFO, "VirtualBoard [data_task]: successfully started low-priority data thread.");
+
   // Cast back 'this' pointer
   VirtualBoard *pthis = (VirtualBoard*)arg;
 
@@ -729,7 +733,7 @@ void VirtualBoard::data_task(void *arg) {
 
     if(agent_end[agent_id]) {
       // We should not recive other packets from this agent!
-      syslog(ATMD_ERR, "VirtualBoard [data_task]: received a packet from an agent that has terminated its measure. Something is wrong!");
+      rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: received a packet from an agent that has terminated its measure. Something is wrong!");
       continue;
     }
 
@@ -747,11 +751,11 @@ void VirtualBoard::data_task(void *arg) {
       if(curr_measure) {
 #ifdef DEBUG
         if(enable_debug)
-          syslog(ATMD_DEBUG, "VirtualBoard [data_task]: received termination packet. Total measure time was: %.3f s.", packet.window_time()/1e9);
+          rt_syslog(ATMD_DEBUG, "VirtualBoard [data_task]: received termination packet. Total measure time was: %.3f s.", packet.window_time()/1e9);
 #endif
         curr_measure->add_time(packet.window_start(), packet.window_time());
       } else {
-        syslog(ATMD_ERR, "VirtualBoard [data_task]: received measure terminated packet, but current measure pointer in NULL.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: received measure terminated packet, but current measure pointer in NULL.");
       }
     }
 
@@ -775,19 +779,19 @@ void VirtualBoard::data_task(void *arg) {
             switch(retval) {
               case -EINVAL:
               case -EIDRM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
                 break;
 
               case -EINTR:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
                 break;
 
               case -EPERM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
                 break;
 
               default:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
                 break;
             }
 
@@ -806,15 +810,15 @@ void VirtualBoard::data_task(void *arg) {
             switch(retval) {
               case -EINVAL:
               case -EIDRM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
                 break;
 
               case -EPERM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
                 break;
 
               default:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
                 break;
             }
 
@@ -825,7 +829,7 @@ void VirtualBoard::data_task(void *arg) {
 
         } else {
           // No starts or curr_measure was NULL
-          syslog(ATMD_WARN, "VirtualBoard [data_task]: measure ended but was empty.");
+          rt_syslog(ATMD_WARN, "VirtualBoard [data_task]: measure ended but was empty.");
         }
 
         // Reset end flags
@@ -851,19 +855,19 @@ void VirtualBoard::data_task(void *arg) {
             switch(retval) {
               case -EINVAL:
               case -EIDRM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was an invalid object.");
                 break;
 
               case -EINTR:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because the task was unlocked.");
                 break;
 
               case -EPERM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex because it was asked in an invalid context.");
                 break;
 
               default:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to acquire measure mutex for an unexpected reason (Code: %d).", retval);
                 break;
             }
 
@@ -907,13 +911,13 @@ void VirtualBoard::data_task(void *arg) {
 
           // Save measure
           if(pthis->save_measure(pthis->measures()-1, filename)) {
-            syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_save() in autosave mode failed.");
+            rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_save() in autosave mode failed.");
             // TODO: handle errors
           }
 
           // Delete last measure
           if(pthis->delete_measure(pthis->measures()-1)) {
-            syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_delete() in autosave mode failed.");
+            rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_delete() in autosave mode failed.");
             // TODO: handle errors
           }
 
@@ -923,15 +927,15 @@ void VirtualBoard::data_task(void *arg) {
             switch(retval) {
               case -EINVAL:
               case -EIDRM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was an invalid object.");
                 break;
 
               case -EPERM:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex because it was asked in an invalid context.");
                 break;
 
               default:
-                syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
+                rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to release measure mutex for an unexpected reason (Code: %d).", retval);
                 break;
             }
 
@@ -967,7 +971,7 @@ void VirtualBoard::data_task(void *arg) {
 
       } else {
         // Error! We missed the first packet or something very bad happened
-        syslog(ATMD_ERR, "VirtualBoard [data_task]: missed the first packet of a data sequence. Discarding current start.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: missed the first packet of a data sequence. Discarding current start.");
         continue;
       }
 
@@ -976,7 +980,7 @@ void VirtualBoard::data_task(void *arg) {
       // The order of packets from a single agent is guaranteed, but it is not between different agents.
       // We need to handle out of sequence packets (maybe we can implement a FIFO of out of sequence packets that will be processed after the current start is over)
       if(curr_start_id[agent_id] != packet.id()) {
-        syslog(ATMD_ERR, "VirtualBoard [data_task]: packet out of squence! PANIC!");
+        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: packet out of squence! PANIC!");
         // TODO: handle out of sequence packets
         continue;
       }
@@ -1304,10 +1308,10 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
       measure_time.resize(agents(),2);
       for(size_t i = 0; i < agents(); i++) {
         if(_measures[measure_number]->times() > i) {
-          measure_begin(i,0) = (uint64_t)(this->_measures[measure_number]->get_begin(i) / 1000) / 1000000;
-          measure_begin(i,1) = (uint64_t)(this->_measures[measure_number]->get_begin(i) / 1000) % 1000000;
-          measure_time(i,0) = (uint64_t)(this->_measures[measure_number]->get_time(i) / 1000) / 1000000;
-          measure_time(i,1) = (uint64_t)(this->_measures[measure_number]->get_time(i) / 1000) % 1000000;
+          measure_begin(i,0) = this->_measures[measure_number]->get_begin(i) / 1000000000;
+          measure_begin(i,1) = this->_measures[measure_number]->get_begin(i) % 1000000000;
+          measure_time(i,0) = this->_measures[measure_number]->get_time(i) / 1000000000;
+          measure_time(i,1) = this->_measures[measure_number]->get_time(i) % 1000000000;
         }
       }
 
