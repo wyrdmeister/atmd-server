@@ -26,6 +26,49 @@ extern bool enable_debug;
 #include "atmd_netagent.h"
 
 
+/* @fn template<typename T> size_t serialize(char * buffer, size_t offset, T var)
+ * Template function to serialize type T to a buffer.
+ */
+template<typename T> size_t AgentMsg::serialize(char * buffer, size_t offset, T var) {
+  if(offset+sizeof(T) > maxsize())
+    throw(0);
+  T* value = reinterpret_cast<T*>( buffer+offset );
+  *value = var;
+  return (offset+sizeof(T));
+}
+
+
+/* @fn size_t serialize(char * buffer, size_t offset, const char* var)
+ * Specialization of serialize template for char arrays, aka strings.
+ */
+size_t AgentMsg::serialize(char * buffer, size_t offset, const char* var) {
+  if(offset+strlen(var)+1 > maxsize())
+    throw(0);
+  strncpy(buffer+offset, var, maxsize()-offset);
+  return (offset+strlen(var)+1);
+}
+
+
+/* @fn template<typename T> size_t deserialize(char * buffer, size_t offset, T var)
+ * Template function to deserialize type T to a buffer.
+ */
+template<typename T> size_t AgentMsg::deserialize(char * buffer, size_t offset, T& var) {
+  T* value = reinterpret_cast<T*>( buffer+offset );
+  var = *value;
+  return (offset+sizeof(T));
+}
+
+
+/* @fn size_t deserialize(char * buffer, size_t offset, const char* var)
+ * Specialization of deserialize template for char arrays, aka strings.
+ */
+size_t AgentMsg::deserialize(char * buffer, size_t offset, char* var, size_t var_len) {
+  strncpy(var, buffer+offset, var_len-1);
+  var[var_len-1] = '\0';
+  return (offset+strlen(buffer+offset)+1);
+}
+
+
 /* @fn int AgentMsg::decode()
  * Decode a control message
  */
@@ -33,13 +76,10 @@ int AgentMsg::decode() {
 
   // Service variables
   size_t offset = 0;
-  uint8_t val_type = 0;
 
   // First 4 bytes of message are type and size, both uint16_t
-  _type = *( reinterpret_cast<uint16_t*>(_buffer) );
-  offset += sizeof(uint16_t);
-  _size = *( reinterpret_cast<uint16_t*>(_buffer + offset) );
-  offset += sizeof(uint16_t);
+  offset = deserialize<uint16_t>(_buffer, offset, _type);
+  offset = deserialize<uint16_t>(_buffer, offset, _size);
 
   switch(_type) {
     case ATMD_CMD_BADTYPE:
@@ -49,155 +89,52 @@ int AgentMsg::decode() {
     case ATMD_CMD_BRD:
     case ATMD_CMD_HELLO:
       // Here we expect a string
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_STR) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: %s argument has wrong type.", (_type == ATMD_CMD_BRD) ? "ATMD_CMD_BRD" : "ATMD_CMD_HELLO");
-        return -1;
-      }
-      strncpy(_version, (char*)(_buffer+offset), ATMD_VER_LEN);
-      _version[ATMD_VER_LEN-1] = '\0';
+      offset = deserialize(_buffer, offset, _version, ATMD_VER_LEN);
       break;
 
     case ATMD_CMD_MEAS_SET:
       // 0) agent_id -> UINT32
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT32) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _agent_id = *(_buffer+offset);
-      offset += sizeof(uint32_t);
+      offset = deserialize<uint32_t>(_buffer, offset, _agent_id);
 
       // 1) start_rising -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT8) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _start_rising = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _start_rising);
 
       // 2) start_falling -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT8) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _start_falling = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _start_falling);
 
       // 3) rising_mask -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT8) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _rising_mask = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _rising_mask);
 
       // 4) falling_mask -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT8) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _falling_mask = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _falling_mask);
 
       // 5) measure_time -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT64) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _measure_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _measure_time);
 
       // 6) window_time -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT64) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _window_time);
 
       // 7) timeout -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT64) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _timeout = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _timeout);
 
-      // 8) timeout -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT64) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _deadtime = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      // 8) deadtime -> UINT64
+      offset = deserialize<uint64_t>(_buffer, offset, _deadtime);
 
       // 9) start_offset -> UINT32
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT32) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _start_offset = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
-      offset += sizeof(uint32_t);
+      offset = deserialize<uint32_t>(_buffer, offset, _start_offset);
 
       // 10) refclk -> UINT16
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT16) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _refclk = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
+      offset = deserialize<uint16_t>(_buffer, offset, _refclk);
 
       // 11) hsdiv -> UINT16
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT16) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET argument has wrong type.");
-        return -1;
-      }
-      _hsdiv = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
+      offset = deserialize<uint16_t>(_buffer, offset, _hsdiv);
 
       break;
 
     case ATMD_CMD_MEAS_CTR:
-      // Here we expect a sigle uint16_t value
-      val_type = *(_buffer+offset);
-      offset++;
-      if(val_type != ATMD_TYPE_UINT16) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR argument has wrong type.");
-        return -1;
-      }
-      _action = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
-      val_type = *(_buffer+offset);
-      if(val_type != ATMD_TYPE_UINT32) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR argument has wrong type.");
-        return -1;
-      }
-      _tdma_cycle = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
+      // Here we expect a uint16_t value plus a uint32_t value
+      offset = deserialize<uint16_t>(_buffer, offset, _action);
+      offset = deserialize<uint32_t>(_buffer, offset, _tdma_cycle);
       break;
 
     case ATMD_CMD_ACK:
@@ -226,8 +163,8 @@ int AgentMsg::encode() {
   memset(_buffer, 0, ATMD_PACKET_SIZE);
 
   // Set type
-  *( reinterpret_cast<uint16_t*>(_buffer) ) = _type;
-  offset += sizeof(uint16_t) * 2; // Skip size
+  offset = serialize<uint16_t>(_buffer, offset, _type);
+  offset = serialize<uint16_t>(_buffer, offset, 0);
 
   switch(_type) {
     case ATMD_CMD_BADTYPE:
@@ -236,98 +173,51 @@ int AgentMsg::encode() {
 
     case ATMD_CMD_BRD:
     case ATMD_CMD_HELLO:
-      *(_buffer+offset) = ATMD_TYPE_STR;
-      offset++;
-      strncpy((char*)(_buffer+offset), _version, ATMD_VER_LEN);
-      offset += strlen(_version)+1;
+      offset = serialize(_buffer, offset, _version);
       break;
 
     case ATMD_CMD_MEAS_SET:
-      // 0) agent_id
-      *(_buffer+offset) = ATMD_TYPE_UINT32;
-      offset++;
-      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _agent_id;
-      offset += sizeof(uint32_t);
+      // 0) agent_id -> UINT32
+      offset = serialize<uint32_t>(_buffer, offset, _agent_id);
 
       // 1) start_rising -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _start_rising;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, _start_rising);
 
       // 2) start_falling -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _start_falling;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, _start_falling);
 
       // 3) rising_mask -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _rising_mask;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, _rising_mask);
 
       // 4) falling_mask -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _falling_mask;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, _falling_mask);
 
       // 5) measure_time -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _measure_time;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint64_t>(_buffer, offset, _measure_time);
 
       // 6) window_time -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_time;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint64_t>(_buffer, offset, _window_time);
 
       // 7) timeout -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _timeout;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint64_t>(_buffer, offset, _timeout);
 
       // 8) deadtime -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _deadtime;
-      offset += sizeof(uint64_t);
-      break;
+      offset = serialize<uint64_t>(_buffer, offset, _deadtime);
 
       // 9) start_offset -> UINT32
-      *(_buffer+offset) = ATMD_TYPE_UINT32;
-      offset++;
-      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _start_offset;
-      offset += sizeof(uint32_t);
-      break;
+      offset = serialize<uint32_t>(_buffer, offset, _start_offset);
 
       // 10) refclk -> UINT16
-      *(_buffer+offset) = ATMD_TYPE_UINT16;
-      offset++;
-      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _refclk;
-      offset += sizeof(uint16_t);
-      break;
+      offset = serialize<uint16_t>(_buffer, offset, _refclk);
 
       // 11) hsdiv -> UINT16
-      *(_buffer+offset) = ATMD_TYPE_UINT16;
-      offset++;
-      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _hsdiv;
-      offset += sizeof(uint16_t);
+      offset = serialize<uint16_t>(_buffer, offset, _hsdiv);
+
       break;
 
     case ATMD_CMD_MEAS_CTR:
-      *(_buffer+offset) = ATMD_TYPE_UINT16;
-      offset++;
-      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _action;
-      offset += sizeof(uint16_t);
-      *(_buffer+offset) = ATMD_TYPE_UINT32;
-      offset++;
-      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _tdma_cycle;
-      offset += sizeof(uint32_t);
+      offset = serialize<uint16_t>(_buffer, offset, _action);
+      offset = serialize<uint32_t>(_buffer, offset, _tdma_cycle);
       break;
 
     case ATMD_CMD_ACK:
@@ -343,7 +233,8 @@ int AgentMsg::encode() {
 
   // Set size
   _size = offset;
-  *( reinterpret_cast<uint16_t*>(_buffer+sizeof(uint16_t)) ) = _size;
+  offset = sizeof(uint16_t);
+  offset = serialize<uint16_t>(_buffer, offset, _size);
 
   return 0;
 }

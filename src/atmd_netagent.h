@@ -187,6 +187,15 @@ public:
   };
 
 private:
+  // Serialize template
+  template<typename T> size_t serialize(char * buffer, size_t offset, T var);
+  size_t serialize(char * buffer, size_t offset, const char* var);
+
+  // Deserialize template
+  template<typename T> size_t deserialize(char * buffer, size_t offset, T& var);
+  size_t deserialize(char * buffer, size_t offset, char* var, size_t var_len);
+
+private:
   // Version string for broadcast / hello messages
   char _version[ATMD_VER_LEN];
 
