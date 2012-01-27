@@ -664,6 +664,20 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
   // Configuration GET commands
   } else if(main_command == "GET") {
 
+    // Get agent configuration
+    if(parameters == "AGENTS") {
+#ifdef DEBUG
+      if(enable_debug)
+        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configuration of agents.");
+#endif
+
+      this->send_command(this->format_command("VAL AGENTS %d", board.agents()));
+      for(size_t i = 0; i < board.agents(); i++) {
+        this->send_command(this->format_command("VAL AGENT %d %s", i, ether_ntoa(board.get_agent(i).agent_addr())));
+      }
+      return 0;
+    }
+
     // Get channel configuration
     cmd_re = "CH (\\d+)";
     if(cmd_re.FullMatch(parameters)) {
