@@ -363,6 +363,7 @@ int main(int argc, char * const argv[])
       default:
         break;
     }
+    terminate_interrupt = true;
     return -1;
   }
 
@@ -416,6 +417,9 @@ int main(int argc, char * const argv[])
       break;
     }
   }
+
+  // Set termination flag
+  terminate_interrupt = true;
 
   // CURL library cleanup
   curl_global_cleanup();
