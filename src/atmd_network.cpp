@@ -935,7 +935,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
           break;
 
         case ATMD_STATUS_BOOT:
-          command += "BOOT"
+          command += "BOOT";
           break;
 
         default:
