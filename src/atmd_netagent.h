@@ -270,7 +270,7 @@ private:
   uint64_t _window_time;
 
   // Number of events added
-  uint32_t _numev;
+  uint16_t _numev;
   uint32_t _total_events;
   size_t _evcount;
 

@@ -26,6 +26,26 @@ extern bool enable_debug;
 #include "atmd_netagent.h"
 
 
+/* @fn
+ * Serialize template
+ */
+template<typename T>
+size_t serialize(char* buffer, size_t offset, T var) {
+  memcpy(buffer+offset, (void*)&var, sizeof(T));
+  return (offset+sizeof(T));
+}
+
+
+/*
+ * Deserialize template
+ */
+template<typename T>
+size_t deserialize(const char* buffer, size_t offset, T& var) {
+  memcpy((void*)&var, buffer+offset, sizeof(T));
+  return (offset+sizeof(T));
+}
+
+
 /* @fn int AgentMsg::decode()
  * Decode a control message
  */
@@ -36,10 +56,8 @@ int AgentMsg::decode() {
   uint8_t val_type = 0;
 
   // First 4 bytes of message are type and size, both uint16_t
-  _type = *( reinterpret_cast<uint16_t*>(_buffer) );
-  offset += sizeof(uint16_t);
-  _size = *( reinterpret_cast<uint16_t*>(_buffer + offset) );
-  offset += sizeof(uint16_t);
+  offset = deserialize<uint16_t>(_buffer, offset, _type);
+  offset = deserialize<uint16_t>(_buffer, offset, _size);
 
   switch(_type) {
     case ATMD_CMD_BADTYPE:
@@ -49,158 +67,130 @@ int AgentMsg::decode() {
     case ATMD_CMD_BRD:
     case ATMD_CMD_HELLO:
       // Here we expect a string
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_STR) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: %s argument has wrong type.", (_type == ATMD_CMD_BRD) ? "ATMD_CMD_BRD" : "ATMD_CMD_HELLO");
         return -1;
       }
       strncpy(_version, (char*)(_buffer+offset), ATMD_VER_LEN);
       _version[ATMD_VER_LEN-1] = '\0';
+      offset += strlen(_buffer+offset)+1;
       break;
 
     case ATMD_CMD_MEAS_SET:
       // 0) agent_id -> UINT32
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT32) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET agent_id argument has wrong type.");
         return -1;
       }
-      _agent_id = *(_buffer+offset);
-      offset += sizeof(uint32_t);
+      offset = deserialize<uint32_t>(_buffer, offset, _agent_id);
 
       // 1) start_rising -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT8) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET start_rising argument has wrong type.");
         return -1;
       }
-      _start_rising = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _start_rising);
 
       // 2) start_falling -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT8) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET start_falling argument has wrong type.");
         return -1;
       }
-      _start_falling = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _start_falling);
 
       // 3) rising_mask -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT8) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET rising_mask argument has wrong type.");
         return -1;
       }
-      _rising_mask = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _rising_mask);
 
       // 4) falling_mask -> UINT8
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT8) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET falling_mask argument has wrong type.");
         return -1;
       }
-      _falling_mask = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, _falling_mask);
 
       // 5) measure_time -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET measure_time argument has wrong type.");
         return -1;
       }
-      _measure_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _measure_time);
 
       // 6) window_time -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET window_time argument has wrong type.");
         return -1;
       }
-      _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _window_time);
 
       // 7) timeout -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET timeout argument has wrong type.");
         return -1;
       }
-      _timeout = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _timeout);
 
       // 8) timeout -> UINT64
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET deadtime argument has wrong type.");
         return -1;
       }
-      _deadtime = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _deadtime);
 
       // 9) start_offset -> UINT32
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT32) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET start_offset argument has wrong type.");
         return -1;
       }
-      _start_offset = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
-      offset += sizeof(uint32_t);
+      offset = deserialize<uint32_t>(_buffer, offset, _start_offset);
 
       // 10) refclk -> UINT16
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT16) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET refclk argument has wrong type.");
         return -1;
       }
-      _refclk = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
+      offset = deserialize<uint16_t>(_buffer, offset, _refclk);
 
       // 11) hsdiv -> UINT16
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT16) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET hsdiv argument has wrong type.");
         return -1;
       }
-      _hsdiv = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
+      offset = deserialize<uint16_t>(_buffer, offset, _hsdiv);
       break;
 
     case ATMD_CMD_MEAS_CTR:
       // 1) Action
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT16) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR action argument has wrong type.");
         return -1;
       }
-      _action = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-      offset += sizeof(uint16_t);
+      offset = deserialize<uint16_t>(_buffer, offset, _action);
 
       // 2) TDMA cycle
-      val_type = *(_buffer+offset);
-      offset++;
+      offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_CTR tdma_cycle argument has wrong type.");
         return -1;
       }
-      _tdma_cycle = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _tdma_cycle);
       break;
 
     case ATMD_CMD_ACK:
@@ -218,6 +208,7 @@ int AgentMsg::decode() {
   return 0;
 }
 
+
 /* @fn int AgentMsg::encode()
  * Encode a control message
  */
@@ -229,8 +220,10 @@ int AgentMsg::encode() {
   memset(_buffer, 0, ATMD_PACKET_SIZE);
 
   // Set type
-  *( reinterpret_cast<uint16_t*>(_buffer) ) = _type;
-  offset += sizeof(uint16_t) * 2; // Skip size
+  offset = serialize<uint16_t>(_buffer, offset, _type);
+
+  // Skip size
+  offset += sizeof(uint16_t);
 
   switch(_type) {
     case ATMD_CMD_BADTYPE:
@@ -239,98 +232,71 @@ int AgentMsg::encode() {
 
     case ATMD_CMD_BRD:
     case ATMD_CMD_HELLO:
-      *(_buffer+offset) = ATMD_TYPE_STR;
-      offset++;
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_STR);
       strncpy((char*)(_buffer+offset), _version, ATMD_VER_LEN);
       offset += strlen(_version)+1;
       break;
 
     case ATMD_CMD_MEAS_SET:
       // 0) agent_id
-      *(_buffer+offset) = ATMD_TYPE_UINT32;
-      offset++;
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT32);
+
       *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _agent_id;
       offset += sizeof(uint32_t);
 
       // 1) start_rising -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _start_rising;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT8);
+      offset = serialize<uint8_t>(_buffer, offset, _start_rising);
 
       // 2) start_falling -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _start_falling;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT8);
+      offset = serialize<uint8_t>(_buffer, offset, _start_falling);
 
       // 3) rising_mask -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _rising_mask;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT8);
+      offset = serialize<uint8_t>(_buffer, offset, _rising_mask);
 
       // 4) falling_mask -> UINT8
-      *(_buffer+offset) = ATMD_TYPE_UINT8;
-      offset++;
-      *( reinterpret_cast<uint8_t*>(_buffer+offset) ) = _falling_mask;
-      offset += sizeof(uint8_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT8);
+      offset = serialize<uint8_t>(_buffer, offset, _falling_mask);
 
       // 5) measure_time -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _measure_time;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
+      offset = serialize<uint64_t>(_buffer, offset, _measure_time);
 
       // 6) window_time -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_time;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
+      offset = serialize<uint64_t>(_buffer, offset, _window_time);
 
       // 7) timeout -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _timeout;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
+      offset = serialize<>(_buffer, offset, _timeout);
 
       // 8) deadtime -> UINT64
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _deadtime;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
+      offset = serialize<uint64_t>(_buffer, offset, _deadtime);
 
       // 9) start_offset -> UINT32
-      *(_buffer+offset) = ATMD_TYPE_UINT32;
-      offset++;
-      *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _start_offset;
-      offset += sizeof(uint32_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT32);
+      offset = serialize<uint32_t>(_buffer, offset, _start_offset);
 
       // 10) refclk -> UINT16
-      *(_buffer+offset) = ATMD_TYPE_UINT16;
-      offset++;
-      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _refclk;
-      offset += sizeof(uint16_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT16);
+      offset = serialize<uint16_t>(_buffer, offset, _refclk);
 
       // 11) hsdiv -> UINT16
-      *(_buffer+offset) = ATMD_TYPE_UINT16;
-      offset++;
-      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _hsdiv;
-      offset += sizeof(uint16_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT16);
+      offset = serialize<uint16_t>(_buffer, offset, _hsdiv);
       break;
 
     case ATMD_CMD_MEAS_CTR:
       // 1) Action
-      *(_buffer+offset) = ATMD_TYPE_UINT16;
-      offset++;
-      *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _action;
-      offset += sizeof(uint16_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT16);
+      offset = serialize<uint16_t>(_buffer, offset, _action);
 
       // 2) TDMA cycle
-      *(_buffer+offset) = ATMD_TYPE_UINT64;
-      offset++;
-      *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _tdma_cycle;
-      offset += sizeof(uint64_t);
+      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
+      offset = serialize<uint64_t>(_buffer, offset, _tdma_cycle);
       break;
 
     case ATMD_CMD_ACK:
@@ -346,7 +312,7 @@ int AgentMsg::encode() {
 
   // Set size
   _size = offset;
-  *( reinterpret_cast<uint16_t*>(_buffer+sizeof(uint16_t)) ) = _size;
+  offset = serialize<uint16_t>(_buffer, sizeof(uint16_t), _size);
 
   return 0;
 }
@@ -361,27 +327,26 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
 
   // Clean buffer
   memset(_buffer, 0, ATMD_PACKET_SIZE);
-  size_t offset = 2 * sizeof(uint16_t); // Leave type and number of events as last job
+
+  // Leave type and number of events as last job
+  size_t offset = 2 * sizeof(uint16_t);
 
   // Set start ID
-  *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = _id;
-  offset += sizeof(uint32_t);
+  offset = serialize<uint32_t>(_buffer, offset, _id);
 
   // Check if this is the first packet
   if(start == 0) {
     _type = ATMD_DT_FIRST;
 
     // Total number of events
-    *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = ch.size();
-    offset += sizeof(uint32_t);
+    _total_events = ch.size();
+    offset = serialize<uint32_t>(_buffer, offset, _total_events);
 
     // Window start time
-    *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_start;
-    offset += sizeof(uint64_t);
+    offset = serialize<uint64_t>(_buffer, offset, _window_start);
 
     // Window duration
-    *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_time;
-    offset += sizeof(uint64_t);
+    offset = serialize<uint64_t>(_buffer, offset, _window_time);
 
   } else {
     _type = ATMD_DT_DATA;
@@ -392,18 +357,9 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
   while(true) {
 
     // Add one event
-#ifdef DEBUG
-    if(enable_debug)
-      if(ch[start] < 1 || ch[start] > 8)
-        rt_syslog(ATMD_WARN, "NetAgent [DataMsg::encode]: found a bad channel number (%d) at position (%u).", ch[start], start);
-#endif
-
-    *( reinterpret_cast<int8_t*>(_buffer+offset) ) = ch[start];
-    offset += sizeof(int8_t);
-    *( reinterpret_cast<int32_t*>(_buffer+offset) ) = stoptime[start];
-    offset += sizeof(int32_t);
-    *( reinterpret_cast<uint32_t*>(_buffer+offset) ) = retrig[start];
-    offset += sizeof(uint32_t);
+    offset = serialize<int8_t>(_buffer, offset, ch[start]);
+    offset = serialize<int32_t>(_buffer, offset, stoptime[start]);
+    offset = serialize<uint32_t>(_buffer, offset, retrig[start]);
 
     // Update counters
     start++;
@@ -425,8 +381,8 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
   _size = offset;
 
   // Write type and number of events
-  *( reinterpret_cast<uint16_t*>(_buffer) ) = _type;
-  *( reinterpret_cast<uint16_t*>(_buffer+sizeof(uint16_t)) ) = count;
+  offset = serialize<uint16_t>(_buffer, 0, _type);
+  offset = serialize<uint16_t>(_buffer, offset, count);
 
   return start;
 }
@@ -445,20 +401,18 @@ int DataMsg::encode() {
     size_t offset = 0;
 
     // Set type
-    *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _type;
-    offset += sizeof(uint16_t);
+    offset = serialize<uint16_t>(_buffer, offset, _type);
 
     // Skip numev and start_id
     offset += sizeof(uint16_t) + sizeof(uint32_t);
 
     // Measure start time
-    *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_start;
-    offset += sizeof(uint64_t);
+    offset = serialize<uint64_t>(_buffer, offset, _window_start);
 
     // Measure duration
-    *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_time;
-    offset += sizeof(uint64_t);
+    offset = serialize<uint64_t>(_buffer, offset, _window_time);
 
+    // Set size
     _size = offset;
     return 0;
 
@@ -476,31 +430,25 @@ int DataMsg::decode() {
   size_t offset = 0;
 
   // Get packet type
-  _type = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-  offset += sizeof(uint16_t);
+  offset = deserialize<uint16_t>(_buffer, offset, _type);
 
   // Read number of events
-  _numev = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
-  offset += sizeof(uint16_t);
+  offset = deserialize<uint16_t>((const char*)_buffer, (size_t)offset, _numev);
 
   // Read ID
-  _id = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
-  offset += sizeof(uint32_t);
+  offset = deserialize<uint32_t>(_buffer, offset, _id);
 
   switch(_type) {
     case ATMD_DT_FIRST:
     case ATMD_DT_ONLY:
       // Total events
-      _total_events = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
-      offset += sizeof(uint32_t);
+      offset = deserialize<uint32_t>(_buffer, offset, _total_events);
 
       // Window start time
-      _window_start = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _window_start);
 
       // Window duration
-      _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _window_time);
 
     case ATMD_DT_DATA:
     case ATMD_DT_LAST:
@@ -510,12 +458,10 @@ int DataMsg::decode() {
 
     case ATMD_DT_TERM:
       // Measure start time
-      _window_start = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _window_start);
 
       // Measure duration
-      _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-      offset += sizeof(uint64_t);
+      offset = deserialize<uint64_t>(_buffer, offset, _window_time);
       break;
 
     default:
@@ -533,19 +479,22 @@ int DataMsg::decode() {
 /* @fn int DataMsg::decode()
  * Decode a data message
  */
-int DataMsg::getevent(size_t i, int8_t &ch, int32_t &stoptime, uint32_t &retrig)const {
+int DataMsg::getevent(size_t i, int8_t& ch, int32_t& stoptime, uint32_t& retrig)const {
   // Check if we reached the last event
   if(i >= _numev)
     return -1;
 
+  // Compute start offset
+  size_t offset = _ev_offset + ATMD_EV_SIZE*i;
+
   // Check buffer limits
-  if(_ev_offset + ATMD_EV_SIZE * (i+1) > ATMD_PACKET_SIZE)
+  if(offset + ATMD_EV_SIZE > ATMD_PACKET_SIZE)
     return -1;
 
   // Extract event
-  ch = *( reinterpret_cast<const int8_t*>(_buffer + _ev_offset + ATMD_EV_SIZE * i) );
-  stoptime = *( reinterpret_cast<const int32_t*>(_buffer + _ev_offset + ATMD_EV_SIZE * i + sizeof(int8_t)) );
-  retrig = *( reinterpret_cast<const uint32_t*>(_buffer + _ev_offset + ATMD_EV_SIZE * i + sizeof(int8_t) + sizeof(uint32_t)) );
+  offset = deserialize<int8_t>(_buffer, offset, ch);
+  offset = deserialize<int32_t>(_buffer, offset, stoptime);
+  offset = deserialize<uint32_t>(_buffer, offset, retrig);
 
   return 0;
 }
