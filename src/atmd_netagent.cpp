@@ -394,8 +394,8 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
     // Add one event
 #ifdef DEBUG
     if(enable_debug)
-      if(ch[start] < 1 && ch[start] > 8)
-        rt_syslog(ATMD_WARN, "NetAgent [DataMsg::encode]: found a bad channel number (%d) at position (%u)", ch[start], start)
+      if(ch[start] < 1 || ch[start] > 8)
+        rt_syslog(ATMD_WARN, "NetAgent [DataMsg::encode]: found a bad channel number (%d) at position (%u).", ch[start], start);
 #endif
 
     *( reinterpret_cast<int8_t*>(_buffer+offset) ) = ch[start];
