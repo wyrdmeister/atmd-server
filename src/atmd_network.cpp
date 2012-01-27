@@ -434,14 +434,15 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
   std::string txt;
   uint32_t val1, val2, val3;
 
-  // If board is booting we refuse to set parameters
-  if(board.status() == ATMD_STATUS_BOOT) {
-    syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting");
-    this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BOOT, network_strerror[ATMD_NETERR_BOOT]));
-  }
-
   // Configuration SET commands
   if(main_command == "SET") {
+
+    // If board is booting we refuse to set parameters
+    if(board.status() == ATMD_STATUS_BOOT) {
+      syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting");
+      this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BOOT, network_strerror[ATMD_NETERR_BOOT]));
+      return 0;
+    }
 
     // Replace commas with dots (commas are not recognized as decimal point)
     pcrecpp::RE("\\,").GlobalReplace(".", &parameters);
@@ -893,6 +894,13 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         syslog(ATMD_DEBUG, "Network [exec_command]: client requested to stop current measure.");
 #endif
 
+      // Check board status
+      if(board.status() != ATMD_STATUS_RUNNING) {
+        // No measure to stop
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_STATUS, network_strerror[ATMD_NETERR_BAD_STATUS]));
+        return 0;
+      }
+
       // Start measure
       if(board.stop_measure()) {
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_STOP, network_strerror[ATMD_NETERR_STOP]));
@@ -924,6 +932,10 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
           command += "ERR";
           // Reset status once notified error
           board.status(ATMD_STATUS_IDLE);
+          break;
+
+        case ATMD_STATUS_BOOT:
+          command += "BOOT"
           break;
 
         default:
@@ -1181,6 +1193,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       case ATMD_STATUS_IDLE:
       case ATMD_STATUS_ERR:
+      case ATMD_STATUS_BOOT:
         break;
 
       default:

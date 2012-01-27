@@ -302,6 +302,7 @@ void VirtualBoard::control_task(void *arg) {
             }
           }
           // Add agent
+          rt_syslog(ATMD_INFO, "VirtualBoard [control_task]: adding agent with address '%s'.", ether_ntoa(&remote_addr));
           pthis->add_agent(i, &remote_addr);
           ag_count++;
           break;
