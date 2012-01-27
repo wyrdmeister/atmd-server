@@ -55,54 +55,60 @@ static const char *reason_str[] = {
  * Log most common abort signals and get a backtrace in case of SIGDEBUG.
  */
 void gen_handler(int signal, siginfo_t *si, void* context) {
-  if(signal == SIGHUP) {
-    terminate_interrupt = true;
+  unsigned int reason = 0;
+  switch(signal) {
+    case SIGHUP:
+      terminate_interrupt = true;
+      return;
 
-  } else if(signal == SIGDEBUG) {
-    // This signal should be ignored as they are sent
-    // every time a task switch to secondary mode
-    unsigned int reason = si->si_value.sival_int;
-    void *bt[32];
-    int nentries;
-    ucontext_t *uc = (ucontext_t *)context;
+    case SIGDEBUG:
+      // These two signal should be ignored as they are sent
+      // every time a task switch to secondary mode
+      reason = si->si_value.sival_int;
+      syslog(ATMD_WARN, "\nSIGDEBUG received, reason %d: %s\n", reason, reason <= SIGDEBUG_WATCHDOG ? reason_str[reason] : "<unknown>");
+      break;
 
-    // Log SIGDEBUG
-    syslog(ATMD_WARN, "\nSIGDEBUG received, reason %d: %s\n", reason, reason <= SIGDEBUG_WATCHDOG ? reason_str[reason] : "<unknown>");
+    case SIGINT:
+      syslog(ATMD_CRIT, "Received signal SIGINT. Terminating.");
+      break;
 
-    nentries = backtrace(bt,32);
-    // overwrite sigaction with caller's address
-#if defined(__i386__)
-    bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
-#elif defined(__x86_64__)
-    bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
-#endif
-    char ** messages = backtrace_symbols(bt, nentries);
+    case SIGFPE:
+      syslog(ATMD_CRIT, "Received signal SIGFPE. Terminating.");
+      break;
 
-    // Print backtrace
-    for(int i = 1; i < nentries; i++)
-      syslog(ATMD_INFO, "[BT] %s#", messages[i]);
+    case SIGSEGV:
+      syslog(ATMD_CRIT, "Received signal SIGSEGV. Terminating.");
+      break;
 
-  } else {
-    switch(signal) {
-      case SIGINT:
-        syslog(ATMD_CRIT, "Received signal SIGINT. Terminating.");
-        break;
-      case SIGFPE:
-        syslog(ATMD_CRIT, "Received signal SIGFPE. Terminating.");
-        break;
-      case SIGSEGV:
-        syslog(ATMD_CRIT, "Received signal SIGSEGV. Terminating.");
-        break;
-      case SIGPIPE:
-        syslog(ATMD_CRIT, "Received signal SIGPIPE. Terminating.");
-        break;
-      default:
-        syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
-        break;
-    }
+    case SIGPIPE:
+      syslog(ATMD_CRIT, "Received signal SIGPIPE. Terminating.");
+      break;
 
-    exit(signal);
+    default:
+      syslog(ATMD_CRIT, "Received signal %d. Terminating.", signal);
+      break;
   }
+
+  // Getting backtrace
+  void *bt[32];
+  int nentries;
+  ucontext_t *uc = (ucontext_t *)context;
+
+  nentries = backtrace(bt,32);
+  // overwrite sigaction with caller's address
+#if defined(__i386__)
+  bt[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+#elif defined(__x86_64__)
+  bt[1] = (void *) uc->uc_mcontext.gregs[REG_RIP];
+#endif
+  char ** messages = backtrace_symbols(bt, nentries);
+
+  // Print backtrace
+  for(int i = 1; i < nentries; i++)
+    syslog(ATMD_INFO, "[BT] %s#", messages[i]);
+
+  if(signal != SIGDEBUG)
+    exit(signal);
 }
 
 
@@ -319,6 +325,59 @@ int main(int argc, char * const argv[]) {
   }
 
 
+  // Create data socket
+  RTnet data_sock;
+  data_sock.rtskbs( (server_conf.rtskbs() > 0) ? server_conf.rtskbs() : ATMD_DEF_RTSKBS );
+  data_sock.protocol(ATMD_PROTO_DATA);
+  data_sock.interface( (strlen(server_conf.rtif()) > 0) ? server_conf.rtif() : ATMD_DEF_RTIF );
+  data_sock.tdma_dev( (strlen(server_conf.tdma_dev()) > 0) ? server_conf.tdma_dev() : ATMD_DEF_TDMA );
+  if(data_sock.init()) {
+    rt_syslog(ATMD_CRIT, "Failed to initialize RTnet data socket. Terminating.");
+    ctrl_sock.close();
+    return -1;
+  }
+
+
+  // Create RT_HEAP
+  RT_HEAP data_heap;
+  retval = rt_heap_create(&data_heap, ATMD_RT_HEAP_NAME, 100000000, H_MAPPABLE);
+  if(retval) {
+    switch(retval) {
+      case -EEXIST:
+        rt_syslog(ATMD_CRIT, "rt_heap_create(): the name is already in use.");
+        break;
+
+      case -EINVAL:
+        rt_syslog(ATMD_CRIT, "rt_heap_create(): wrong heap size.");
+        break;
+
+      case -ENOMEM:
+        rt_syslog(ATMD_CRIT, "rt_heap_create(): not enough memory available.");
+        break;
+
+      case -EPERM:
+        rt_syslog(ATMD_CRIT, "rt_heap_create(): invalid context.");
+        break;
+
+      case -ENOSYS:
+        rt_syslog(ATMD_CRIT, "rt_heap_create(): real-time support not available in userspace.");
+        break;
+
+      default:
+        rt_syslog(ATMD_CRIT, "rt_heap_create(): unexpected return code (%d).", retval);
+        break;
+    }
+    ctrl_sock.close();
+    data_sock.close();
+    return -1;
+  }
+
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Successfully created RT heap.");
+#endif
+
+
   // Agent message object
   AgentMsg ctrl_packet;
   int opcode = 0;
@@ -383,62 +442,6 @@ int main(int argc, char * const argv[]) {
 #ifdef DEBUG
   if(enable_debug)
     rt_syslog(ATMD_DEBUG, "Answered to master.");
-#endif
-
-  // Create data socket
-  RTnet data_sock;
-  data_sock.rtskbs( (server_conf.rtskbs() > 0) ? server_conf.rtskbs() : ATMD_DEF_RTSKBS );
-  data_sock.protocol(ATMD_PROTO_DATA);
-  data_sock.interface( (strlen(server_conf.rtif()) > 0) ? server_conf.rtif() : ATMD_DEF_RTIF );
-  data_sock.tdma_dev( (strlen(server_conf.tdma_dev()) > 0) ? server_conf.tdma_dev() : ATMD_DEF_TDMA );
-  if(data_sock.init()) {
-    rt_syslog(ATMD_CRIT, "Failed to initialize RTnet data socket. Terminating.");
-    ctrl_sock.close();
-    return -1;
-  }
-
-#ifdef DEBUG
-  if(enable_debug)
-    rt_syslog(ATMD_DEBUG, "Successfully created RT data socket.");
-#endif
-
-  // Create RT_HEAP
-  RT_HEAP data_heap;
-  retval = rt_heap_create(&data_heap, ATMD_RT_HEAP_NAME, 200000000, H_MAPPABLE);
-  if(retval) {
-    switch(retval) {
-      case -EEXIST:
-        rt_syslog(ATMD_CRIT, "rt_heap_create(): the name is already in use.");
-        break;
-
-      case -EINVAL:
-        rt_syslog(ATMD_CRIT, "rt_heap_create(): wrong heap size.");
-        break;
-
-      case -ENOMEM:
-        rt_syslog(ATMD_CRIT, "rt_heap_create(): not enough memory available.");
-        break;
-
-      case -EPERM:
-        rt_syslog(ATMD_CRIT, "rt_heap_create(): invalid context.");
-        break;
-
-      case -ENOSYS:
-        rt_syslog(ATMD_CRIT, "rt_heap_create(): real-time support not available in userspace.");
-        break;
-
-      default:
-        rt_syslog(ATMD_CRIT, "rt_heap_create(): unexpected return code (%d).", retval);
-        break;
-    }
-    ctrl_sock.close();
-    data_sock.close();
-    return -1;
-  }
-
-#ifdef DEBUG
-  if(enable_debug)
-    rt_syslog(ATMD_DEBUG, "Successfully created RT heap.");
 #endif
 
   // Init thread params
@@ -518,7 +521,7 @@ int main(int argc, char * const argv[]) {
 
     // Decode packet
     if(ctrl_packet.decode()) {
-      rt_syslog(ATMD_ERR, "The received packet failed to decode.");
+      rt_syslog(ATMD_ERR, "Failed to decode a control packet.");
       continue;
     }
 
@@ -526,6 +529,27 @@ int main(int argc, char * const argv[]) {
     switch(ctrl_packet.type()) {
 
       case ATMD_CMD_BRD:
+        // If the broadcast comes from our previous master it has restartd so we can answer again with an HELLO packet
+        rt_syslog(ATMD_INFO, "Master restarted. Handshaking again.");
+
+        // Prepare packet
+        ctrl_packet.clear();
+        ctrl_packet.type(ATMD_CMD_HELLO);
+        ctrl_packet.version(VERSION);
+        ctrl_packet.encode();
+
+        // Answer to master
+        if(ctrl_sock.send(ctrl_packet, &master_addr)) {
+          rt_syslog(ATMD_CRIT, "Failed to send a packet while answering master broadcast. Terminating.");
+          terminate_interrupt = true;
+          continue;
+        }
+
+        if(board.status() == ATMD_STATUS_RUNNING)
+          board.stop(true);
+        board.reset_config();
+        break;
+
       case ATMD_CMD_HELLO:
       case ATMD_CMD_ACK:
         // Ignore these packet types

@@ -236,6 +236,9 @@ void atmd_measure(void *arg) {
       return;
     }
 
+    // Reset board status
+    board.status(ATMD_STATUS_IDLE);
+
 #ifdef DEBUG
     if(enable_debug)
       rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: successfully sent termination data packet through RTnet.");
