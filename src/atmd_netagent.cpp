@@ -446,7 +446,10 @@ int DataMsg::encode() {
 
     // Set type
     *( reinterpret_cast<uint16_t*>(_buffer+offset) ) = _type;
-    offset += sizeof(uint16_t) * 2; // Skip numev
+    offset += sizeof(uint16_t);
+
+    // Skip numev and start_id
+    offset += sizeof(uint16_t) + sizeof(uint32_t);
 
     // Measure start time
     *( reinterpret_cast<uint64_t*>(_buffer+offset) ) = _window_start;
@@ -476,20 +479,6 @@ int DataMsg::decode() {
   _type = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
   offset += sizeof(uint16_t);
 
-  // ATMD_DT_TERM needs different handling
-  if(_type == ATMD_DT_TERM) {
-    // Measure start time
-    _window_start = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-    offset += sizeof(uint64_t);
-
-    // Measure duration
-    _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
-    offset += sizeof(uint64_t);
-
-    _size = offset;
-    return 0;
-  }
-
   // Read number of events
   _numev = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
   offset += sizeof(uint16_t);
@@ -517,6 +506,16 @@ int DataMsg::decode() {
     case ATMD_DT_LAST:
       // Set event offset
       _ev_offset = offset;
+      break;
+
+    case ATMD_DT_TERM:
+      // Measure start time
+      _window_start = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
+      offset += sizeof(uint64_t);
+
+      // Measure duration
+      _window_time = *( reinterpret_cast<uint64_t*>(_buffer+offset) );
+      offset += sizeof(uint64_t);
       break;
 
     default:
