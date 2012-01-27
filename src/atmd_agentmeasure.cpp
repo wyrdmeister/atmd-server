@@ -237,7 +237,7 @@ void atmd_measure(void *arg) {
     }
 
     // Reset board status
-    board.status(ATMD_STATUS_IDLE);
+    sys->board->status(ATMD_STATUS_IDLE);
 
 #ifdef DEBUG
     if(enable_debug)
