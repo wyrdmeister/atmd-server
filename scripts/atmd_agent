@@ -10,10 +10,11 @@
 #
 . /lib/lsb/init-functions
 
+PIDFILE="/var/run/atmd_agent.pid"
 
 atmd_start() {
     log_daemon_msg "Starting ATMD-GPX control agent" "atmd_agent"
-    start-stop-daemon --start --quiet --exec "/usr/local/bin/atmd_agent" --pidfile "/var/run/atmd_agent.pid"
+    start-stop-daemon --start --quiet --exec "/usr/local/bin/atmd_agent" --pidfile $PIDFILE -- -p $PIDFILE
     RET="$?"
     log_end_msg $RET
     return $RET
@@ -21,10 +22,10 @@ atmd_start() {
 
 atmd_stop() {
     log_daemon_msg "Stopping ATMD-GPX control agent" "atmd_agent"
-    start-stop-daemon --stop --signal 1 --quiet --name "atmd_agent" --retry 3 --pidfile "/var/run/atmd_agent.pid"
+    start-stop-daemon --stop --signal 1 --quiet --retry 3 --pidfile $PIDFILE
     RET="$?"
     log_end_msg $RET
-    rm -f "/var/run/atmd_agent.pid"
+    rm -f $PIDFILE
     return $RET
 }
 
