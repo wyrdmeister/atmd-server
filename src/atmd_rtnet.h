@@ -89,7 +89,7 @@ public:
   int send(const GenMsg& packet, const struct ether_addr* addr)const;
 
   // Receive packet
-  int recv(GenMsg& packet, struct ether_addr* addr = NULL)const;
+  int recv(GenMsg& packet, struct ether_addr* addr = NULL, int64_t timeout = TM_INFINITE)const;
 
   // Close socket
   void close() {

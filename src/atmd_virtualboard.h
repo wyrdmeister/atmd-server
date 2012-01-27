@@ -79,13 +79,15 @@ public:
   // Constructor and destructor
   VirtualBoard(AtmdConfig &obj) : _config(obj) { clear_config(); };
   ~VirtualBoard() {
+    // Join on RT tasks
+    rt_task_join(&_ctrl_task);
+    rt_task_join(&_rt_data_task);
+    rt_task_join(&_data_task);
+    // Close RT sockets
     _ctrl_sock.close();
     _data_sock.close();
+    // CURL cleanup
     curl_easy_cleanup(this->easy_handle);
-    // Unblock tasks
-    rt_task_unblock(&_ctrl_task);
-    rt_task_unblock(&_rt_data_task);
-    rt_task_unblock(&_data_task);
   };
 
   // Start all the relevant RT tasks and sends broadcasts to find agents
@@ -152,11 +154,9 @@ public:
   // Setup timings
   bool set_window(const std::string& val) { return _window_time.set(val); };
   bool set_tottime(const std::string& val) { return _measure_time.set(val); };
-  bool set_timeout(const std::string& val) { return _timeout_time.set(val); };
   bool set_deadtime(const std::string& val) { return _deadtime.set(val); };
   const Timings& get_window()const { return _window_time; };
   const Timings& get_tottime()const { return _measure_time; };
-  const Timings& get_timeout()const { return _timeout_time; };
   const Timings& get_deadtime()const { return _deadtime; };
 
   // Setup resolution
@@ -303,9 +303,6 @@ private:
 
   // Measure time
   Timings _measure_time;
-
-  // Timeout time
-  Timings _timeout_time;
 
   // Deadtime
   Timings _deadtime;

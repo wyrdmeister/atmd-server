@@ -63,7 +63,7 @@ public:
   int send(int& opcode, const void* buffer, size_t buff_size, void* answer, size_t* answer_size);
 
   // Receive
-  int recv(int& opcode, void* buffer, size_t& buff_size);
+  int recv(int& opcode, void* buffer, size_t& buff_size, int64_t timeout = TM_INFINITE);
 
   // Reply
   int reply(int opcode, const void* buffer, size_t buff_size);

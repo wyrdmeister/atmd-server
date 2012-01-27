@@ -168,10 +168,13 @@ int RTnet::send(const GenMsg& packet, const struct ether_addr* addr)const {
 }
 
 
-/* @fn int RTnet::recv(GenMsg& packet, struct ether_addr* remote_addr = NULL)
+/* @fn int RTnet::recv(GenMsg& packet, struct ether_addr* remote_addr = NULL, int64_t timeout = TM_INFINITE)
  *
  */
-int RTnet::recv(GenMsg& packet, struct ether_addr* addr)const {
+int RTnet::recv(GenMsg& packet, struct ether_addr* addr, int64_t timeout)const {
+
+  int retval = 0;
+
   // Clear packet
   packet.clear();
 
@@ -180,29 +183,40 @@ int RTnet::recv(GenMsg& packet, struct ether_addr* addr)const {
   socklen_t remote_len = sizeof(struct sockaddr_ll);
   memset(&remote_addr, 0, sizeof(struct sockaddr_ll));
 
+  // Configure timeout on socket
+  retval = rt_dev_ioctl(_sock, RTNET_RTIOC_TIMEOUT, &timeout);
+  if(retval) {
+    // Error setting timeout
+    rt_syslog(ATMD_ERR, "RTnet [recv]: failed IOCTL to set socket timeout.");
+    return -1;
+  }
+
   // Receive packet
-  int retval = rt_dev_recvfrom(_sock, packet.get_buffer(), packet.maxsize(), 0, (struct sockaddr*)&remote_addr, &remote_len);
+  retval = rt_dev_recvfrom(_sock, packet.get_buffer(), packet.maxsize(), 0, (struct sockaddr*)&remote_addr, &remote_len);
   if(retval < 0) {
+    // If returned -EWOULDBLOCK we reached timeout
+    if(retval == -EWOULDBLOCK || retval == -ETIMEDOUT)
+      return -EWOULDBLOCK;
+
     rt_syslog(ATMD_ERR, "RTnet [recv]: failed to receive packet. Error: '%s'.", strerror(-retval));
     return -1;
 
-  } else {
+  }
 
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "RTnet [recv]: received packet with size %d from address '%s'.", retval, ether_ntoa((struct ether_addr*)&(remote_addr.sll_addr)));
+#endif
+
+  // Copy remote addr
+  if(addr) {
+    memcpy(addr, &(remote_addr.sll_addr), sizeof(struct ether_addr));
+
+  } else {
 #ifdef DEBUG
     if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "RTnet [recv]: received packet with size %d from address '%s'.", retval, ether_ntoa((struct ether_addr*)&(remote_addr.sll_addr)));
+      rt_syslog(ATMD_DEBUG, "RTnet [recv]: skipping address copy.");
 #endif
-
-    // Copy remote addr
-    if(addr) {
-      memcpy(addr, &(remote_addr.sll_addr), sizeof(struct ether_addr));
-
-    } else {
-#ifdef DEBUG
-      if(enable_debug)
-        rt_syslog(ATMD_DEBUG, "RTnet [recv]: skipping address copy.");
-#endif
-    }
   }
   return 0;
 }

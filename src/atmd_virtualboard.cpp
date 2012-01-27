@@ -206,6 +206,8 @@ int VirtualBoard::send_command(int& opcode, GenMsg& packet) {
  */
 void VirtualBoard::control_task(void *arg) {
 
+  int retval = 0;
+
   // Init rt_printf and rt_syslog
   rt_print_auto_init(1);
   rt_syslog(ATMD_INFO, "VirtualBoard [control_task]: successfully started real-time control thread.");
@@ -229,28 +231,15 @@ void VirtualBoard::control_task(void *arg) {
   struct ether_addr brd_addr;
   ether_aton_r("FF:FF:FF:FF:FF:FF", &brd_addr);
 
-  // Send broadcast packet
-  if(pthis->ctrl_sock().send(packet, &brd_addr)) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send broadcast packet.");
-    // Terminate server
-    terminate_interrupt = true;
-    return;
-  }
 
-#ifdef DEBUG
-    if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully sent broadcast packet to agents.");
-#endif
-
-  // Then wait for responses
   size_t ag_count = 0;
   struct ether_addr remote_addr;
-  packet.clear();
 
   while(ag_count < pthis->config().agents()) {
-    // Receive packet
-    if(pthis->ctrl_sock().recv(packet, &remote_addr)) {
-      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet.");
+
+    // Send broadcast packet
+    if(pthis->ctrl_sock().send(packet, &brd_addr)) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send broadcast packet.");
       // Terminate server
       terminate_interrupt = true;
       return;
@@ -258,43 +247,69 @@ void VirtualBoard::control_task(void *arg) {
 
 #ifdef DEBUG
     if(enable_debug)
-      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: received answer from agent with address '%s'.", ether_ntoa(&remote_addr));
+      rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: successfully sent broadcast packet to agents.");
 #endif
 
-    // Check type and version
-    packet.decode();
-    if(packet.type() != ATMD_CMD_HELLO) {
-      // Packet is not an answer, ignore
-      rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: received an unexpected packet with type (%d).", packet.type());
-      continue;
-    }
+    // Then wait for responses
+    packet.clear();
 
-    if(strncmp(packet.version(), VERSION, ATMD_VER_LEN) != 0) {
-      // Packet has wrong version
-      rt_syslog(ATMD_ERR, "VirtualBoard [control_task]: received HELLO packet with wrong version number (it was '%s' instead of '%s').", packet.version(), VERSION);
-      continue;
-    }
+    while(true) {
+      // Receive packet
+      retval = pthis->ctrl_sock().recv(packet, &remote_addr, 100000000);
+      if(retval) {
+        if(retval == -EWOULDBLOCK) {
+          // We timedout receive. No answer from all agents within 100ms. Resend broadcast
+          break;
 
-    // Compare address with configured ones
-    for(size_t i = 0; i < pthis->config().agents(); i++) {
-      if(memcmp(&remote_addr, pthis->config().get_agent(i), sizeof(struct ether_addr)) == 0) {
-
-        // Found! Now compare address with those already received
-        for(size_t j = 0; j < pthis->agents(); j++) {
-          if(memcmp(&remote_addr, pthis->get_agent(j).agent_addr(), sizeof(struct ether_addr)) == 0) {
-            rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: received a duplicate answer from a agent with address '%s'.", ether_ntoa(&remote_addr));
-            goto ignore;
-          }
+        } else {
+          // Error during receive
+          rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive agent answer packet.");
+          // Terminate server
+          terminate_interrupt = true;
+          return;
         }
-        // Add agent
-        pthis->add_agent(i, &remote_addr);
-        ag_count++;
-        break;
       }
+
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: received answer from agent with address '%s'.", ether_ntoa(&remote_addr));
+#endif
+
+      // Check type and version
+      packet.decode();
+      if(packet.type() != ATMD_CMD_HELLO) {
+        // Packet is not an answer, ignore
+        rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: received an unexpected packet with type (%d).", packet.type());
+        continue;
+      }
+
+      if(strncmp(packet.version(), VERSION, ATMD_VER_LEN) != 0) {
+        // Packet has wrong version
+        rt_syslog(ATMD_ERR, "VirtualBoard [control_task]: received HELLO packet with wrong version number (it was '%s' instead of '%s').", packet.version(), VERSION);
+        continue;
+      }
+
+      // Compare address with configured ones
+      for(size_t i = 0; i < pthis->config().agents(); i++) {
+        if(memcmp(&remote_addr, pthis->config().get_agent(i), sizeof(struct ether_addr)) == 0) {
+
+          // Found! Now compare address with those already received
+          for(size_t j = 0; j < pthis->agents(); j++) {
+            if(memcmp(&remote_addr, pthis->get_agent(j).agent_addr(), sizeof(struct ether_addr)) == 0) {
+              rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: received a duplicate answer from a agent with address '%s'.", ether_ntoa(&remote_addr));
+              goto ignore;
+            }
+          }
+          // Add agent
+          pthis->add_agent(i, &remote_addr);
+          ag_count++;
+          break;
+        }
+      }
+      ignore:
+        // Ignoring agent packet...
+        continue;
     }
-    ignore:
-      // Ignoring agent packet...
-      continue;
   }
 
   // Issue clear_config() command
@@ -423,12 +438,26 @@ void VirtualBoard::control_task(void *arg) {
         } else {
           // Some error. This is bad!
           rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: agent answers are not consistent. Only some of them where ERR.");
-          // TODO: must send a stop
 
-          // Send blank bad packet
+          // We send a stop to every board
           packet.clear();
-          if(ctrl_if.reply(ATMD_CMD_BADTYPE, packet.get_buffer(), packet.size())) {
-            // TODO: here it might break...
+          packet.type(ATMD_CMD_MEAS_CTR);
+          packet.action(ATMD_ACTION_STOP);
+          packet.tdma_cycle(0);
+          packet.encode();
+          if(pthis->ctrl_sock().send(packet, &brd_addr)) {
+            // Failed to send packet
+            rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send control packet over RTnet.");
+            // Terminate server
+            terminate_interrupt = true;
+            return;
+          }
+
+          // Send back an error packet
+          packet.clear();
+          packet.type(ATMD_CMD_ERROR);
+          packet.encode();
+          if(ctrl_if.reply(ATMD_CMD_ERROR, packet.get_buffer(), packet.size())) {
             rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
             // Terminate server
             terminate_interrupt = true;
@@ -463,11 +492,13 @@ void VirtualBoard::control_task(void *arg) {
           } else {
             // Some busy. This is bad!
             rt_syslog(ATMD_WARN, "VirtualBoard [control_task]: agent answers are not consistent. Only some of them where BUSY.");
-            // TODO: boh!
+            // TODO: must find a way to handle some board busy and some not... this condition might indicate some error!
 
             // Send blank bad packet
             packet.clear();
-            if(ctrl_if.reply(ATMD_CMD_BADTYPE, packet.get_buffer(), packet.size())) {
+            packet.type(ATMD_CMD_BUSY);
+            packet.encode();
+            if(ctrl_if.reply(ATMD_CMD_BUSY, packet.get_buffer(), packet.size())) {
               rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to send a command to the queue.");
               // Terminate server
               terminate_interrupt = true;
@@ -544,6 +575,8 @@ void VirtualBoard::control_task(void *arg) {
  */
 void VirtualBoard::rt_data_task(void *arg) {
 
+  int retval = 0;
+
   // Init rt_printf and rt_syslog
   rt_print_auto_init(1);
   rt_syslog(ATMD_INFO, "VirtualBoard [rt_data_task]: successfully started real-time data thread.");
@@ -556,7 +589,7 @@ void VirtualBoard::rt_data_task(void *arg) {
   struct ether_addr remote_addr;
 
   // We stop and wait for the agent setup to complete
-  int retval = rt_task_suspend(NULL);
+  retval = rt_task_suspend(NULL);
   if(retval) {
     switch(retval) {
       case -EINTR:
@@ -580,13 +613,17 @@ void VirtualBoard::rt_data_task(void *arg) {
 
     // Check termination interrupt
     if(terminate_interrupt) {
-      pthis->data_sock().close();
       return;
     }
 
     // Get a packet
     packet.clear();
-    if(pthis->data_sock().recv(packet, &remote_addr)) {
+    retval = pthis->data_sock().recv(packet, &remote_addr, 10000000);
+    if(retval) {
+      if(retval == -EWOULDBLOCK)
+        continue;
+
+      // Receive failed
       rt_syslog(ATMD_CRIT, "VirtualBoard [rt_data_task]: failed to receive a packet over RTnet socket.");
       // Terminate server
       terminate_interrupt = true;
@@ -715,7 +752,12 @@ void VirtualBoard::data_task(void *arg) {
     memset(msg, 0, msg_size);
 
     // Receive packet from queue
-    if(pthis->data_queue().recv(msg, msg_size)) {
+    retval = pthis->data_queue().recv(msg, msg_size, 10000000);
+    if(retval) {
+      if(retval == -EWOULDBLOCK)
+        continue;
+
+      // Receive failed
       rt_syslog(ATMD_CRIT, "VirtualBoard [data_task]: failed to receive packet from data queue.");
       // Terminate server
       terminate_interrupt = true;
@@ -884,7 +926,7 @@ void VirtualBoard::data_task(void *arg) {
               measure_begin = curr_measure->get_start(0)->get_window_begin(i);
             if(curr_measure->get_start(curr_measure->count_starts()-1)->times() > i)
               measure_time = curr_measure->get_start(curr_measure->count_starts()-1)->get_window_begin(i) +
-                            curr_measure->get_start(curr_measure->count_starts()-1)->get_window_time(i) - measure_begin;
+                             curr_measure->get_start(curr_measure->count_starts()-1)->get_window_time(i) - measure_begin;
             curr_measure->add_time(measure_begin, measure_time);
           }
 
@@ -912,13 +954,16 @@ void VirtualBoard::data_task(void *arg) {
           // Save measure
           if(pthis->save_measure(pthis->measures()-1, filename)) {
             rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_save() in autosave mode failed.");
-            // TODO: handle errors
+            // We have to stop the measurement
+            if(pthis->stop_measure())
+               rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: failed to stop measure after save error.");
           }
 
           // Delete last measure
           if(pthis->delete_measure(pthis->measures()-1)) {
-            rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: measure_delete() in autosave mode failed.");
-            // TODO: handle errors
+            // We have to stop the measurement
+            if(pthis->stop_measure())
+               rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: failed to stop measure after delete error.");
           }
 
           // Release lock of measure object
@@ -1042,9 +1087,6 @@ void VirtualBoard::clear_config() {
 
   // Measure time
   _measure_time.set("0s");
-
-  // Timeout time
-  _timeout_time.set("0s");
 
   // Deadtime
   _deadtime.set("0s");
@@ -1488,9 +1530,6 @@ size_t VirtualBoard::curl_read(void *ptr, size_t size, size_t count, void *data)
  *
  */
 int VirtualBoard::start_measure() {
-  // Check status
-  if(_status != ATMD_STATUS_IDLE)
-    return -1;
 
   AgentMsg packet;
   int opcode = 0;
@@ -1525,7 +1564,6 @@ int VirtualBoard::start_measure() {
     // Timing info
     packet.measure_time(_measure_time.get_nsec());
     packet.window_time(_window_time.get_nsec());
-    packet.timeout(_timeout_time.get_nsec());
     packet.deadtime(_deadtime.get_nsec());
 
     // Board parameters

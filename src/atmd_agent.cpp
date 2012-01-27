@@ -108,7 +108,9 @@ void gen_handler(int signal, siginfo_t *si, void* context) {
     syslog(ATMD_INFO, "[BT] %s#", messages[i]);
 
   if(signal != SIGDEBUG)
-    exit(signal);
+    //exit(signal);
+    // NOTE: we set terminate interrupt instead of exiting directly. In this way may we can manage to close the RT sockets.
+    terminate_interrupt = true;
 }
 
 
@@ -486,7 +488,9 @@ int main(int argc, char * const argv[]) {
   RTcomm ctrl_if;
   if(ctrl_if.init(&meas_th)) {
     rt_syslog(ATMD_CRIT, "Failed to init control interface. Terminating.");
-    // TODO: add cleanup of RT tasks
+    // We should delete the RT task
+    rt_task_join(&meas_th);
+    // Then we MUST close the RT sockets!
     ctrl_sock.close();
     data_sock.close();
     return -1;
@@ -506,7 +510,15 @@ int main(int argc, char * const argv[]) {
       break;
 
     // Wait for a control packet
-    if(ctrl_sock.recv(ctrl_packet, &remote_addr)) {
+    int retval = ctrl_sock.recv(ctrl_packet, &remote_addr, 10000000);
+    if(retval) {
+      if(retval == -EWOULDBLOCK) {
+        // TODO: anything more to do?
+        // Cycle back, so that this way we can check for terminate_interrupt
+        continue;
+      }
+
+      // Receive failed
       rt_syslog(ATMD_CRIT, "Failed to receive packet from master. Terminating.");
       terminate_interrupt = true;
       continue;
@@ -573,7 +585,6 @@ int main(int argc, char * const argv[]) {
         // Set measure info
         measure_info.measure_time(ctrl_packet.measure_time());
         measure_info.window_time(ctrl_packet.window_time());
-        measure_info.timeout(ctrl_packet.timeout());
         measure_info.deadtime(ctrl_packet.deadtime());
 
         // Prepare answer
@@ -688,18 +699,12 @@ int main(int argc, char * const argv[]) {
     }
   }
 
+  // Delete measurement thread
+  rt_task_join(&meas_th);
+
   // Close sockets
   ctrl_sock.close();
   data_sock.close();
-
-  // Unsuspend measurement thread
-  rt_task_unblock(&meas_th);
-
-  // Wait on measurement thread termination
-  rt_task_join(&meas_th);
-
-  // Cleanup
-  // TODO
 
   return 0;
 }

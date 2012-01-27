@@ -112,18 +112,22 @@ int RTcomm::send(int& opcode, const void* buffer, size_t buff_size, void * answe
 }
 
 
-/* @fn int RTcomm::recv(int& opcode, void* buffer, size_t& buff_size)
+/* @fn int RTcomm::recv(int& opcode, void* buffer, size_t& buff_size, int64_t timeout)
  * 
  */
-int RTcomm::recv(int& opcode, void* buffer, size_t& buff_size) {
+int RTcomm::recv(int& opcode, void* buffer, size_t& buff_size, int64_t timeout) {
 
   // Clear buffer
   memset(_recv_buff, 0, ATMD_PACKET_SIZE);
   _recv.size = ATMD_PACKET_SIZE;
 
   // Receive message
-  int retval = rt_task_receive(&_recv, TM_INFINITE);
+  int retval = rt_task_receive(&_recv, timeout);
   if(retval <= 0) {
+    if(retval == -EWOULDBLOCK || retval == -ETIMEDOUT)
+      // No message arrived before timeout
+      return -EWOULDBLOCK;
+
     switch(retval) {
       case -ENOBUFS:
         rt_syslog(ATMD_ERR, "RTcomm [recv]: rt_task_receive() failed. Buffer not large enough to store message.");

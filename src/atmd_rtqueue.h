@@ -48,7 +48,7 @@ public:
   int send(const char * buffer, size_t buff_size);
 
   // Receive message from queue
-  int recv(char * buffer, size_t &buff_size);
+  int recv(char * buffer, size_t &buff_size, int64_t timeout = TM_INFINITE);
 
 private:
   // Queue descriptor

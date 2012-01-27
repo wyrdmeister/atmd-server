@@ -145,8 +145,6 @@ public:
   uint64_t measure_time()const { return _measure_time; };
   void window_time(uint64_t val) { _window_time = val; };
   uint64_t window_time()const { return _window_time; };
-  void timeout(uint64_t val) { _timeout = val; };
-  uint64_t timeout()const { return _timeout; };
   void deadtime(uint64_t val) { _deadtime = val; };
   uint64_t deadtime()const { return _deadtime; };
 
@@ -177,7 +175,6 @@ public:
     _falling_mask = 0;
     _measure_time = 0;
     _window_time = 0;
-    _timeout = 0;
     _deadtime = 0;
     _start_offset = 0;
     _refclk = 0;
@@ -200,7 +197,6 @@ private:
   uint8_t _falling_mask;
   uint64_t _measure_time;
   uint64_t _window_time;
-  uint64_t _timeout;
   uint64_t _deadtime;
   uint32_t _start_offset;
   uint16_t _refclk;

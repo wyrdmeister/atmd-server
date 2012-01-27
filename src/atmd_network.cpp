@@ -40,6 +40,7 @@ extern bool enable_debug;
 #define ATMD_NETERR_START           9
 #define ATMD_NETERR_STOP           10
 #define ATMD_NETERR_BOOT           11
+#define ATMD_NETERR_BAD_STATUS     12
 
 static const char *network_strerror[] = {
   "NONE",
@@ -53,7 +54,8 @@ static const char *network_strerror[] = {
   "STAT",
   "START",
   "STOP",
-  "BOOT"
+  "BOOT",
+  "BAD_STATUS"
 };
 
 #include "atmd_network.h"
@@ -509,25 +511,6 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       return 0;
     }
 
-    // Catching timeout time setup command
-    cmd_re = "TO ([0-9\\.]+[umsMh]{0,1})";
-
-    if(cmd_re.FullMatch(parameters)) {
-      cmd_re.FullMatch(parameters, &txt);
-#ifdef DEBUG
-      if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting total measure time to \"%s\".", txt.c_str());
-#endif
-
-      if(board.set_timeout(txt)) {
-        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as the timeout time (\"%s\")", txt.c_str());
-        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
-      } else {
-        this->send_command("ACK");
-      }
-      return 0;
-    }
-
     // Catching deadtime time setup command
     cmd_re = "TD ([0-9\\.]+[umsMh]{0,1})";
 
@@ -733,19 +716,6 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       return 0;
     }
 
-    // Get timeout
-    if(parameters == "TO") {
-#ifdef DEBUG
-      if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured start wait timeout.");
-#endif
-
-      std::string answer = "VAL TO ";
-      answer += board.get_timeout().get();
-      this->send_command(answer);
-      return 0;
-    }
-
     // Get deadtime
     if(parameters == "TD") {
 #ifdef DEBUG
@@ -864,6 +834,33 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       if(enable_debug)
           syslog(ATMD_DEBUG, "Network [exec_command]: client requested to start a measure.");
 #endif
+
+      // Check board status
+      if(board.status() != ATMD_STATUS_IDLE) {
+        // Board status does not permit to start a measure
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_STATUS, network_strerror[ATMD_NETERR_BAD_STATUS]));
+        return 0;
+      }
+
+      // Check that we have defined a measure time
+      if(board.get_tottime().get_nsec() == 0) {
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
+        return 0;
+      }
+
+      // Check that we have defined a window time
+      if(board.get_window().get_nsec() == 0) {
+        // You must specify a window time!
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
+        return 0;
+      }
+
+      // Check that window time is not more that measure time
+      if(board.get_window().get_nsec() > board.get_tottime().get_nsec()) {
+        // Window time cannot be greater that measure time
+        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
+        return 0;
+      }
 
       // Start measure
       if(board.start_measure()) {

@@ -35,6 +35,7 @@ extern bool enable_debug;
  * Data is saved into a memory area allocated within a RT heap. The pointer is passed to the main RT thread through a RT message queue.
  */
 void atmd_measure(void *arg) {
+
   int retval = 0;
 
   // Auto init RT print services
@@ -112,7 +113,15 @@ void atmd_measure(void *arg) {
 
     // Put thread to sleep, waiting for a start command
     ctrl_size = sizeof(meas_info);
-    if(ctrl_if.recv(opcode, &meas_info, ctrl_size)) {
+    retval = ctrl_if.recv(opcode, &meas_info, ctrl_size, 10000000);
+    if(retval) {
+      if(retval == -EWOULDBLOCK) {
+        // TODO: anything more to do?
+        // We continue cycling (in this way we check for the termination interrupt)
+        continue;
+      }
+
+      // Receive failed
       rt_syslog(ATMD_ERR, "Measure [atmd_measure]: Failed to receive info from control queue.");
       // Terminate server
       terminate_interrupt = true;
@@ -141,7 +150,6 @@ void atmd_measure(void *arg) {
       rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure window: %.0f us.", meas_info.window_time()/1e3);
       rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure time: %.0f us.", meas_info.measure_time()/1e3);
       rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure deadtime: %.0f us.", meas_info.deadtime()/1e3);
-      rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: measure timeout: %.0f us.", meas_info.timeout()/1e3);
       rt_syslog(ATMD_DEBUG, "Measure [atmd_measure]: TDMA cycle: %u.", meas_info.tdma_cycle());
     }
 #endif
@@ -183,7 +191,8 @@ void atmd_measure(void *arg) {
       events.clear();
 
       // Call measure function
-      retval = atmd_get_start(sys->board, meas_info.window_time(), meas_info.timeout(), events);
+      // NOTE: Defined start wait timeout as the time that remains for the measure.
+      retval = atmd_get_start(sys->board, meas_info.window_time(), meas_info.measure_time() - (measure_end-measure_start), events);
       if(retval) {
         rt_syslog(ATMD_ERR, "Measure [atmd_measure]: failed to get start. Terminating measure.");
         measure_end = rt_timer_read();
@@ -307,8 +316,6 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
       rt_syslog(ATMD_DEBUG, "Measure [atmd_get_start]: timed out waiting for a start event.");
       return -ATMD_ERR_NOSTART;
 
-    } else {
-      // TODO: rt_task_sleep(??);
     }
 
   } while(true);
@@ -363,7 +370,8 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
     prv_intflag = act_intflag;
 
     // When we recieve the stop command, we set the finish_window flag
-    // TODO: redefine stop command check (if needed...)
+    if(board->stop())
+      finish_window = true;
 
     if(en_fifo0) {
       // Read TDC-GPX FIFO0

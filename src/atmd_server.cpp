@@ -108,7 +108,9 @@ void gen_handler(int signal, siginfo_t *si, void* context) {
     syslog(ATMD_INFO, "[BT] %s#", messages[i]);
 
   if(signal != SIGDEBUG)
-    exit(signal);
+    //exit(signal);
+    // NOTE: we set terminate interrupt instead of exiting directly. In this way may we can manage to close the RT sockets.
+    terminate_interrupt = true;
 }
 
 

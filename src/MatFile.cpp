@@ -215,7 +215,12 @@ int MatCellArray::write(MatFile &file) {
 					matrix->write(file);
 
 				} else {
+
+#ifdef _SYS_SYSLOG_H
+					syslog(LOG_DAEMON|LOG_ERR, "Runtime error! MatCellArray::write requested an unexpected type (%s).", cells[i]->get_class_name().c_str());
+#else
 					std::cerr << "Runtime error! MatCellArray::write requested an unexpected type (" << cells[i]->get_class_name() << ")." << std::endl;
+#endif
 					return -1;
 				}
 
@@ -451,7 +456,12 @@ int MatStruct::write(MatFile &file) {
 					matrix->write(file);
 
 				} else {
+				
+#ifdef _SYS_SYSLOG_H
+					syslog(LOG_DAEMON|LOG_ERR, "Runtime error! MatCellArray::write requested an unexpected type (%s).", field_data[i]->get_class_name().c_str());
+#else
 					std::cerr << "Runtime error! MatCellArray::write requested an unexpected type (" << field_data[i]->get_class_name() << ")." << std::endl;
+#endif
 					return -1;
 				}
 
@@ -557,15 +567,31 @@ int MatObj::add_obj(MatMatrix *obj) {
 
 	} else if(obj->get_class_name() == std::string("cell")) {
 		//MatCellArray *matrix = dynamic_cast<MatCellArray*>(obj);
-		// TODO
+		// TODO: cell type still to be implemented.
+#ifdef _SYS_SYSLOG_H
+		syslog(LOG_DAEMON|LOG_ERR, "Runtime error! MatObj::add_obj requested type 'cell' that is not yet implemented.");
+#else
+		std::cerr << "Runtime error! MatObj::add_obj requested type 'cell' that is not yet implemented." << std::endl;
+#endif
+		return -1;
 
 	} else if(obj->get_class_name() == std::string("struct")) {
 		//MatStruct *matrix = dynamic_cast<MatStruct*>(obj);
-		// TODO
+		// TODO: struct type still to be implemented.
+#ifdef _SYS_SYSLOG_H
+		syslog(LOG_DAEMON|LOG_ERR, "Runtime error! MatObj::add_obj requested type 'struct' that is not yet implemented.");
+#else
+		std::cerr << "Runtime error! MatObj::add_obj requested type 'struct' that is not yet implemented." << std::endl;
+#endif
+		return -1;
 
 	} else {
-		std::cerr << "Runtime error! MatObj::add_obj requested an unexpected type (" << obj->get_class_name() << ")." << std::endl;
-		return -1;
+#ifdef _SYS_SYSLOG_H
+		syslog(LOG_DAEMON|LOG_ERR, "Runtime error! MatObj::add_obj requested an unexpected type (%s).", obj->get_class_name().c_str());
+#else   
+		std::cerr << "MatObj::add_obj requested an unexpected type (" << obj->get_class_name() << ")." << std::endl;
+#endif
+			return -1;
 	}
 	return 0;
 }

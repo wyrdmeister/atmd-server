@@ -71,7 +71,7 @@ public:
  */
 class MeasureDef {
 public:
-  MeasureDef() : _measure_time(0), _window_time(0), _timeout(0), _deadtime(0), _tdma_cycle(0) {};
+  MeasureDef() : _measure_time(0), _window_time(0), _deadtime(0), _tdma_cycle(0) {};
   ~MeasureDef() {};
 
   // Manage timings
@@ -79,8 +79,6 @@ public:
   RTIME measure_time() { return _measure_time; };
   void window_time(RTIME time) { _window_time = time; };
   RTIME window_time() { return _window_time; };
-  void timeout(RTIME time) { _timeout = time; };
-  RTIME timeout() { return _timeout; };
   void deadtime(RTIME time) { _deadtime = time; };
   RTIME deadtime() { return _deadtime; };
 
@@ -92,7 +90,6 @@ private:
   // Timings
   RTIME _measure_time;
   RTIME _window_time;
-  RTIME _timeout;
   RTIME _deadtime;
 
   // TDMA cycle

@@ -137,20 +137,12 @@ int AgentMsg::decode() {
       // 7) timeout -> UINT64
       offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT64) {
-        rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET timeout argument has wrong type.");
-        return -1;
-      }
-      offset = deserialize<uint64_t>(_buffer, offset, _timeout);
-
-      // 8) timeout -> UINT64
-      offset = deserialize<uint8_t>(_buffer, offset, val_type);
-      if(val_type != ATMD_TYPE_UINT64) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET deadtime argument has wrong type.");
         return -1;
       }
       offset = deserialize<uint64_t>(_buffer, offset, _deadtime);
 
-      // 9) start_offset -> UINT32
+      // 8) start_offset -> UINT32
       offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT32) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET start_offset argument has wrong type.");
@@ -158,7 +150,7 @@ int AgentMsg::decode() {
       }
       offset = deserialize<uint32_t>(_buffer, offset, _start_offset);
 
-      // 10) refclk -> UINT16
+      // 9) refclk -> UINT16
       offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT16) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET refclk argument has wrong type.");
@@ -166,7 +158,7 @@ int AgentMsg::decode() {
       }
       offset = deserialize<uint16_t>(_buffer, offset, _refclk);
 
-      // 11) hsdiv -> UINT16
+      // 10) hsdiv -> UINT16
       offset = deserialize<uint8_t>(_buffer, offset, val_type);
       if(val_type != ATMD_TYPE_UINT16) {
         rt_syslog(ATMD_ERR, "NetAgent [AgentMsg::decode]: ATMD_CMD_MEAS_SET hsdiv argument has wrong type.");
@@ -268,23 +260,19 @@ int AgentMsg::encode() {
       offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
       offset = serialize<uint64_t>(_buffer, offset, _window_time);
 
-      // 7) timeout -> UINT64
-      offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
-      offset = serialize<>(_buffer, offset, _timeout);
-
-      // 8) deadtime -> UINT64
+      // 7) deadtime -> UINT64
       offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT64);
       offset = serialize<uint64_t>(_buffer, offset, _deadtime);
 
-      // 9) start_offset -> UINT32
+      // 8) start_offset -> UINT32
       offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT32);
       offset = serialize<uint32_t>(_buffer, offset, _start_offset);
 
-      // 10) refclk -> UINT16
+      // 9) refclk -> UINT16
       offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT16);
       offset = serialize<uint16_t>(_buffer, offset, _refclk);
 
-      // 11) hsdiv -> UINT16
+      // 10) hsdiv -> UINT16
       offset = serialize<uint8_t>(_buffer, offset, ATMD_TYPE_UINT16);
       offset = serialize<uint16_t>(_buffer, offset, _hsdiv);
       break;

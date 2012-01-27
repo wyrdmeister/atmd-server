@@ -116,13 +116,17 @@ int RTqueue::send(const char *buffer, size_t buff_size) {
 /* @fn int RTqueue::recv(void * buffer, size_t& buff_size)
  *
  */
-int RTqueue::recv(char * buffer, size_t& buff_size) {
+int RTqueue::recv(char * buffer, size_t& buff_size, int64_t timeout) {
 
   void * msg = NULL;
 
   // Receive message
-  int retval = rt_queue_receive(&_descriptor, &msg, TM_INFINITE);
+  int retval = rt_queue_receive(&_descriptor, &msg, timeout);
   if(retval < 0) {
+    if(retval == -EWOULDBLOCK || retval == -ETIMEDOUT)
+      return -EWOULDBLOCK;
+
+    // Receive failed
     switch(retval) {
       case -EINVAL:
        rt_syslog(ATMD_CRIT, "RTqueue [recv]: rt_queue_receive() failed. Invalid queue descriptor.");
