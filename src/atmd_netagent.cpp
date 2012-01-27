@@ -392,6 +392,12 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
   while(true) {
 
     // Add one event
+#ifdef DEBUG
+    if(enable_debug)
+      if(ch[start] < 1 && ch[start] > 8)
+        rt_syslog(ATMD_WARN, "NetAgent [DataMsg::encode]: found a bad channel number (%d) at position (%u)", ch[start], start)
+#endif
+
     *( reinterpret_cast<int8_t*>(_buffer+offset) ) = ch[start];
     offset += sizeof(int8_t);
     *( reinterpret_cast<int32_t*>(_buffer+offset) ) = stoptime[start];
@@ -467,7 +473,7 @@ int DataMsg::decode() {
   size_t offset = 0;
 
   // Get packet type
-  _type = *( reinterpret_cast<uint16_t*>(_buffer) );
+  _type = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
   offset += sizeof(uint16_t);
 
   // ATMD_DT_TERM needs different handling
@@ -485,11 +491,11 @@ int DataMsg::decode() {
   }
 
   // Read number of events
-  _numev = *( reinterpret_cast<uint16_t*>(_buffer) );
+  _numev = *( reinterpret_cast<uint16_t*>(_buffer+offset) );
   offset += sizeof(uint16_t);
 
   // Read ID
-  _type = *( reinterpret_cast<uint32_t*>(_buffer) );
+  _id = *( reinterpret_cast<uint32_t*>(_buffer+offset) );
   offset += sizeof(uint32_t);
 
   switch(_type) {
