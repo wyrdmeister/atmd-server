@@ -222,20 +222,21 @@ void VirtualBoard::control_task(void *arg) {
 
   // Now we can search for agents!
   AgentMsg packet;
-  packet.clear();
-  packet.type(ATMD_CMD_BRD);
-  packet.version(VERSION);
-  packet.encode();
 
   // Broadcast address
   struct ether_addr brd_addr;
   ether_aton_r("FF:FF:FF:FF:FF:FF", &brd_addr);
 
-
   size_t ag_count = 0;
   struct ether_addr remote_addr;
 
   while(ag_count < pthis->config().agents()) {
+
+    // Build packet
+    packet.clear();
+    packet.type(ATMD_CMD_BRD);
+    packet.version(VERSION);
+    packet.encode();
 
     // Send broadcast packet
     if(pthis->ctrl_sock().send(packet, &brd_addr)) {
@@ -311,6 +312,8 @@ void VirtualBoard::control_task(void *arg) {
         continue;
     }
   }
+
+  // Now we have all agents correctly configured
 
   // Issue clear_config() command
   pthis->clear_config();
