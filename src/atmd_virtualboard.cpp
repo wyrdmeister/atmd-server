@@ -956,7 +956,7 @@ void VirtualBoard::data_task(void *arg) {
           file_number.width(4);
           file_number.fill('0');
           file_number << pthis->get_counter();
-          std::string filename = pthis->get_prefix() + "_" + file_number.str();
+          std::string filename = pthis->get_prefix() + "_" + file_number.str() + pthis->get_format_ext();
           pthis->increment_counter();
 
           // Save measure

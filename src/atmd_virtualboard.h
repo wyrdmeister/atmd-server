@@ -183,6 +183,23 @@ public:
   // Setup format
   void set_format(uint32_t val) { _format = val; };
   uint32_t get_format()const { return _format; };
+  const char* get_format_ext()const {
+    switch(_format) {
+        case ATMD_FORMAT_RAW:
+        case ATMD_FORMAT_PS:
+        case ATMD_FORMAT_US:
+        default:
+          return ".dat";
+        case ATMD_FORMAT_MATPS1:
+        case ATMD_FORMAT_MATPS2:
+        case ATMD_FORMAT_MATPS2_FTP:
+        case ATMD_FORMAT_MATPS2_ALL:
+        case ATMD_FORMAT_MATPS3:
+        case ATMD_FORMAT_MATPS3_FTP:
+        case ATMD_FORMAT_MATPS3_ALL:
+          return ".txt";
+    }
+  }
 
   // Setup autosave
   void set_autosave(uint32_t val) { _autosave = val; };
