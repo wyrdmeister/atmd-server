@@ -94,12 +94,18 @@ public:
   // Close socket
   void close() {
     if(_sock >= 0) {
-      rt_dev_close(_sock);
-      _sock = -1;
+      int retval = rt_dev_close(_sock);
+      if(retval)
+        rt_syslog(ATMD_CRIT, "RTnet [close]: failed to close RT socket.");
+      else
+        _sock = -1;
     }
     if(_tdma >= 0) {
-      rt_dev_close(_tdma);
-      _tdma = -1;
+      int retval = rt_dev_close(_tdma);
+      if(retval)
+        rt_syslog(ATMD_CRIT, "RTnet [close]: failed to close TDMA device.");
+      else
+        _tdma = -1;
     }
   };
 
