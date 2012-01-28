@@ -50,12 +50,12 @@
 class Network {
   public:
   Network();
-  ~Network() {};
+  ~Network() { if(listen_socket >= 0) close(listen_socket); };
 
   // Network initialization
   int init();
   int accept_client();
-  void close_client() { if(this->client_socket) close(this->client_socket); this->client_socket = 0; };
+  void close_client() { if(this->client_socket >= 0) close(this->client_socket); this->client_socket = -1; };
 
   // Command managing
   int get_command(string& command);

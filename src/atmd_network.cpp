@@ -67,8 +67,8 @@ static const char *network_strerror[] = {
 Network::Network() {
   address = ATMD_DEF_LISTEN;
   port = ATMD_DEF_PORT;
-  listen_socket = 0;
-  client_socket = 0;
+  listen_socket = -1;
+  client_socket = -1;
   valid_commands.clear();
 
   // Valid commands - ATMD protocol version 2.0
@@ -90,16 +90,16 @@ int Network::init() {
   // Creation of an AF_INET socket
   if( (this->listen_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
     // Failed to create the socket
-    syslog(ATMD_ERR, "Network [init]: failed to create listening socket (Error: %m).");
+    rt_syslog(ATMD_ERR, "Network [init]: failed to create listening socket (Error: %s).", strerror(errno));
     throw(ATMD_ERR_SOCK);
   }
 
   // Configuration the listening socket for non blocking I/O
   if(fcntl(this->listen_socket, F_SETFL, O_NONBLOCK) == -1) {
     // Failed to set socket flags
-    syslog(ATMD_ERR, "Network [init]: failed to set socket flag O_NONBLOCK (Error: %m).");
+    rt_syslog(ATMD_ERR, "Network [init]: failed to set socket flag O_NONBLOCK (Error: %s).", strerror(errno));
     close(this->listen_socket);
-    this->listen_socket = 0;
+    this->listen_socket = -1;
     throw(ATMD_ERR_SOCK);
   }
 
@@ -109,31 +109,31 @@ int Network::init() {
   bind_address.sin_family = AF_INET;
   bind_address.sin_port = htons(this->port);
   if( !inet_aton(this->address.c_str(), &(bind_address.sin_addr)) ) {
-    syslog(ATMD_ERR, "Network [init]: failed to convert ip address (%s).", this->address.c_str());
+    rt_syslog(ATMD_ERR, "Network [init]: failed to convert ip address (%s).", this->address.c_str());
     close(this->listen_socket);
-    this->listen_socket = 0;
+    this->listen_socket = -1;
     throw(ATMD_ERR_LISTEN);
   }
 
   // Binding of the socket to the local address
   if(bind(this->listen_socket, (struct sockaddr *) &bind_address, sizeof(bind_address)) == -1) {
     // Binding failed
-    syslog(ATMD_ERR, "Network [init]: failed binding to address %s (Error: %m).", this->address.c_str());
+    rt_syslog(ATMD_ERR, "Network [init]: failed binding to address %s (Error: %s).", this->address.c_str(), strerror(errno));
     close(this->listen_socket);
-    this->listen_socket = 0;
+    this->listen_socket = -1;
     throw(ATMD_ERR_LISTEN);
   }
 
   // Start to listen
   if(listen(this->listen_socket, 1) == -1) {
     // Listen failed
-    syslog(ATMD_ERR, "Network [init]: failed listening on address %s (Error: %m).", this->address.c_str());
+    rt_syslog(ATMD_ERR, "Network [init]: failed listening on address %s (Error: %s).", this->address.c_str(), strerror(errno));
     close(this->listen_socket);
-    this->listen_socket = 0;
+    this->listen_socket = -1;
     throw(ATMD_ERR_LISTEN);
   }
 
-  syslog(ATMD_INFO, "Network [init]: begin listening on address %s:%d.", this->address.c_str(), this->port);
+  rt_syslog(ATMD_INFO, "Network [init]: begin listening on address %s:%d.", this->address.c_str(), this->port);
   return 0;
 }
 
@@ -167,8 +167,8 @@ int Network::accept_client() {
 
       // An error occurred
       } else {
-        syslog(ATMD_ERR, "Network [accept]: accept failed (Error: %m).");
-        this->client_socket = 0;
+        rt_syslog(ATMD_ERR, "Network [accept]: accept failed (Error: %s).", strerror(errno));
+        this->client_socket = -1;
         return -1;
       }
     } else {
@@ -181,12 +181,12 @@ int Network::accept_client() {
   if(terminate_interrupt) {
     if(this->client_socket > 0) {
       close(client_socket);
-      this->client_socket = 0;
+      this->client_socket = -1;
     }
     return -1;
   }
 
-  syslog(ATMD_INFO, "Network [accept]: successfully accepted a connection from %s:%d.", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+  rt_syslog(ATMD_INFO, "Network [accept]: successfully accepted a connection from %s:%d.", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
   return 0;
 }
 
@@ -224,23 +224,23 @@ int Network::get_command(std::string& command) {
     switch(e) {
       case ATMD_ERR_RECV:
         // A recv call failed... errno should be still valid...
-        syslog(ATMD_ERR, "Network [get_command]: recv failed (Error: %m).");
+        rt_syslog(ATMD_ERR, "Network [get_command]: recv failed (Error: %s).", strerror(errno));
         break;
       case ATMD_ERR_CLOSED:
-        syslog(ATMD_ERR, "Network [get_command]: client closed the connection.");
+        rt_syslog(ATMD_ERR, "Network [get_command]: client closed the connection.");
         break;
       case ATMD_ERR_TERM:
-        syslog(ATMD_ERR, "Network [get_command]: command recieving interrupted by HUP signal.");
+        rt_syslog(ATMD_ERR, "Network [get_command]: command recieving interrupted by HUP signal.");
         break;
       default:
         // Unexpected exception... this should never happen!
-        syslog(ATMD_CRIT, "Network [get_command]: unexpected exception %d.", e);
+        rt_syslog(ATMD_CRIT, "Network [get_command]: unexpected exception %d.", e);
     }
     // We pass the exception to the parent
     throw(e);
 
   } catch(...) {
-      syslog(ATMD_ERR, "Network [get_command]: unhandled exception");
+      rt_syslog(ATMD_ERR, "Network [get_command]: unhandled exception");
       throw(ATMD_ERR_UNKNOWN_EX);
   }
 }
@@ -271,13 +271,13 @@ int Network::send_command(std::string command) {
     if(retval == remaining) {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [send_command]: sent command \"%s\".", orig_command.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [send_command]: sent command \"%s\".", orig_command.c_str());
 #endif
       return 0;
 
     // The command was partially sent, we try to send what is left
     } else if(retval != -1 && retval < remaining) {
-      syslog(ATMD_WARN, "Network [send_command]: partially sent command \"%s\". Sent out %d bytes out of %d.", orig_command.c_str(), sent, (unsigned int) command.length());
+      rt_syslog(ATMD_WARN, "Network [send_command]: partially sent command \"%s\". Sent out %d bytes out of %d.", orig_command.c_str(), sent, (unsigned int) command.length());
       sent = retval;
       remaining = remaining - retval;
       continue;
@@ -286,14 +286,14 @@ int Network::send_command(std::string command) {
     } else {
       if(retval == -1) {
         if(errno == ECONNRESET || errno == EPIPE) {
-          syslog(ATMD_ERR, "Network [send_command]: remote connection closed.");
+          rt_syslog(ATMD_ERR, "Network [send_command]: remote connection closed.");
           throw(ATMD_ERR_CLOSED);
         } else if (errno == EAGAIN || errno == EINTR) {
           continue;
         }
-        syslog(ATMD_ERR, "Network [send_command]: 'send' failed with error \"%m\".");
+        rt_syslog(ATMD_ERR, "Network [send_command]: 'send' failed with error \"%s\".", strerror(errno));
       } else {
-        syslog(ATMD_ERR, "Network [send_command]: 'send' failed with a return value of %d (lenght of data %d).", retval, remaining);
+        rt_syslog(ATMD_ERR, "Network [send_command]: 'send' failed with a return value of %d (lenght of data %d).", retval, remaining);
       }
       throw(ATMD_ERR_SEND);
     }
@@ -337,9 +337,9 @@ int Network::check_buffer(std::string& command) {
       }
     }
   } catch(std::exception& e) {
-    syslog(ATMD_ERR, "Network [check_buffer]: caught an exception (%s)", e.what());
+    rt_syslog(ATMD_ERR, "Network [check_buffer]: caught an exception (%s)", e.what());
   } catch(...) {
-    syslog(ATMD_ERR, "Network [check_buffer]: unhandled exception");
+    rt_syslog(ATMD_ERR, "Network [check_buffer]: unhandled exception");
   }
 
   // No command found in the buffer, so we return -1
@@ -439,7 +439,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
     // If board is booting we refuse to set parameters
     if(board.status() == ATMD_STATUS_BOOT) {
-      syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting");
+      rt_syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting");
       this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BOOT, network_strerror[ATMD_NETERR_BOOT]));
       return 0;
     }
@@ -454,7 +454,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1, &val2, &val3);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting channel %d (rising: %d, falling: %d).", val1, val2, val3);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting channel %d (rising: %d, falling: %d).", val1, val2, val3);
 #endif
 
       if(val1 == 0) {
@@ -468,7 +468,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         this->send_command("ACK");
 
       } else {
-        syslog(ATMD_WARN, "Network [exec_command]: trying to set non-existent channel %d.", val1);
+        rt_syslog(ATMD_WARN, "Network [exec_command]: trying to set non-existent channel %d.", val1);
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_CH, network_strerror[ATMD_NETERR_BAD_CH]));
       }
       return 0;
@@ -481,11 +481,11 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting window time to \"%s\".", txt.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting window time to \"%s\".", txt.c_str());
 #endif
 
       if(board.set_window(txt)) {
-        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as a measurement window (\"%s\")", txt.c_str());
+        rt_syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as a measurement window (\"%s\")", txt.c_str());
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
       } else {
         this->send_command("ACK");
@@ -500,11 +500,11 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting total measure time to \"%s\".", txt.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting total measure time to \"%s\".", txt.c_str());
 #endif
 
       if(board.set_tottime(txt)) {
-        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as the total measurement time (\"%s\")", txt.c_str());
+        rt_syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as the total measurement time (\"%s\")", txt.c_str());
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
       } else {
         this->send_command("ACK");
@@ -519,11 +519,11 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting total measure time to \"%s\".", txt.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting total measure time to \"%s\".", txt.c_str());
 #endif
 
       if(board.set_deadtime(txt)) {
-        syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as deadtime (\"%s\")", txt.c_str());
+        rt_syslog(ATMD_WARN, "Network [exec_command]: the supplied time string is not valid as deadtime (\"%s\")", txt.c_str());
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_TIMESTR, network_strerror[ATMD_NETERR_BAD_TIMESTR]));
       } else {
         this->send_command("ACK");
@@ -538,19 +538,19 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1, &val2);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting resolution (ref: %d, hs: %d).", val1, val2);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting resolution (ref: %d, hs: %d).", val1, val2);
 #endif
 
       // Check that no measures are running. Changing resolution during a measure will give bad data
       if(board.status() == ATMD_STATUS_RUNNING) {
-        syslog(ATMD_ERR, "Network [exec_command]: the resolution cannot be changed during a measurement.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: the resolution cannot be changed during a measurement.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_MEAS_RUN, network_strerror[ATMD_NETERR_MEAS_RUN]));
         return 0;
       }
 
       // We check that the parameters are meaningful. We cannot change the resolution too much!
       if(val1 < 6 || val2 < 60) {
-        syslog(ATMD_ERR, "Network [exec_command]: the resolution parameters passed are meaningless (ref: %d, hs: %d).", val1, val2);
+        rt_syslog(ATMD_ERR, "Network [exec_command]: the resolution parameters passed are meaningless (ref: %d, hs: %d).", val1, val2);
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_PARAM, network_strerror[ATMD_NETERR_BAD_PARAM]));
         return 0;
       }
@@ -565,7 +565,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting offset to %d.", val1);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting offset to %d.", val1);
 #endif
 
       // Start offset is truncated at a length of 18 bits
@@ -580,7 +580,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-          syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP host to \"%s\".", txt.c_str());
+          rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP host to \"%s\".", txt.c_str());
 #endif
 
       board.set_host(txt);
@@ -594,7 +594,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-          syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP username to \"%s\".", txt.c_str());
+          rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP username to \"%s\".", txt.c_str());
 #endif
 
       board.set_user(txt);
@@ -608,7 +608,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP password.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting FTP password.");
 #endif
 
       board.set_password(txt);
@@ -622,7 +622,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting autostart file prefix \"%s\".", txt.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting autostart file prefix \"%s\".", txt.c_str());
 #endif
 
       board.set_prefix(txt);
@@ -636,7 +636,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting autorestart save format to %d.", val1);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting autorestart save format to %d.", val1);
 #endif
 
       board.set_format(val1);
@@ -650,7 +650,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: setting autosave to %d starts.", val1);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting autosave to %d starts.", val1);
 #endif
 
       board.set_autosave(val1);
@@ -669,7 +669,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "AGENTS") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configuration of agents.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configuration of agents.");
 #endif
 
       this->send_command(this->format_command("VAL AGENTS %d", board.agents()));
@@ -685,7 +685,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configuration of channel %d.", val1);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configuration of channel %d.", val1);
 #endif
 
       std::string answer;
@@ -709,7 +709,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "ST") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured window time.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured window time.");
 #endif
 
       std::string answer = "VAL ST ";
@@ -722,7 +722,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "TT") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured total measure time.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured total measure time.");
 #endif
 
       std::string answer = "VAL TT ";
@@ -735,7 +735,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "TD") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured window deadtime.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured window deadtime.");
 #endif
 
       std::string answer = "VAL TD ";
@@ -748,7 +748,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "RS") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured resolution.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured resolution.");
 #endif
 
       uint16_t refclk, hs;
@@ -762,7 +762,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "OF") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured offset.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured offset.");
 #endif
 
       std::string answer = this->format_command("VAL OF %d", board.get_start_offset());
@@ -774,7 +774,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "HOST") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
 #endif
 
       txt = board.get_host();
@@ -786,7 +786,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "USER") {
 #ifdef DEBUG
         if(enable_debug)
-            syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+            rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
 #endif
 
         txt = board.get_user();
@@ -798,7 +798,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "PSW") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
 #endif
 
       this->send_command(this->format_command("VAL PSW %s", (board.psw_set()) ? "OK" : "NONE"));
@@ -809,7 +809,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "PREFIX") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured FTP host.");
 #endif
 
       txt = board.get_prefix();
@@ -821,7 +821,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "FORMAT") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured save format.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured save format.");
 #endif
 
       this->send_command(this->format_command("VAL FORMAT %d", board.get_format()));
@@ -832,7 +832,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "AUTOSAVE") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured autosave save format.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured autosave save format.");
 #endif
 
       this->send_command(this->format_command("VAL AUTOSAVE %d", board.get_autosave()));
@@ -847,7 +847,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "START") {
 #ifdef DEBUG
       if(enable_debug)
-          syslog(ATMD_DEBUG, "Network [exec_command]: client requested to start a measure.");
+          rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested to start a measure.");
 #endif
 
       // Check board status
@@ -891,7 +891,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "STOP") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested to stop current measure.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested to stop current measure.");
 #endif
 
       // Check board status
@@ -915,7 +915,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "STATUS") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested board status.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested board status.");
 #endif
 
       std::string command = "MSR STATUS ";
@@ -952,12 +952,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "LST" || parameters == "LIST") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested the list of unsaved measures. List contained %lu measures.", board.measures());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested the list of unsaved measures. List contained %lu measures.", board.measures());
 #endif
 
       // Acquire measure lock
       if(board.acquire_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -978,7 +978,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Release lock
       if(board.release_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -992,12 +992,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1, &txt);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested to save measure %u to file \"%s\"", val1, txt.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested to save measure %u to file \"%s\"", val1, txt.c_str());
 #endif
 
       // Acquire measure lock
       if(board.acquire_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1010,7 +1010,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Release lock
       if(board.release_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1026,12 +1026,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &modifier, &val1, &win_start, &win_ampl);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u with window (s = %s, a = %s).", val1, win_start.c_str(), win_ampl.c_str());
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u with window (s = %s, a = %s).", val1, win_start.c_str(), win_ampl.c_str());
 #endif
 
       // Acquire measure lock
       if(board.acquire_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1063,7 +1063,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Release lock
       if(board.release_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1076,12 +1076,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &modifier, &val1);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u.", val1);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested stats of measure %u.", val1);
 #endif
 
       // Acquire measure lock
       if(board.acquire_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1112,7 +1112,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Release lock
       if(board.release_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1126,12 +1126,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       cmd_re.FullMatch(parameters, &val1);
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested to delete measure %u.", val1);
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested to delete measure %u.", val1);
 #endif
 
       // Acquire measure lock
       if(board.acquire_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1144,7 +1144,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Release lock
       if(board.release_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1156,12 +1156,12 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
     if(parameters == "CLR") {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "Network [exec_command]: client requested to clear all measures.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested to clear all measures.");
 #endif
 
       // Acquire measure lock
       if(board.acquire_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error acquiring lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1171,7 +1171,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Release lock
       if(board.release_lock()) {
-        syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
+        rt_syslog(ATMD_ERR, "Network [exec_command]: error releasing lock of measure struct.");
         this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_LOCK, network_strerror[ATMD_NETERR_LOCK]));
         return 0;
       }
@@ -1211,7 +1211,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
   } else {
     // This case should never be reached. We log a critical message.
-    syslog(ATMD_CRIT, "Network [exec_command]: got an unknown command and this should never happen! Command was \"%s\".", command.c_str());
+    rt_syslog(ATMD_CRIT, "Network [exec_command]: got an unknown command and this should never happen! Command was \"%s\".", command.c_str());
     return 0;
   }
 

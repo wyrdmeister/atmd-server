@@ -58,7 +58,7 @@
  */
 class RTnet {
 public:
-  RTnet() : _sock(-1), _if_id(0), _rtskbs(ATMD_DEF_RTSKBS), _protocol(ATMD_PROTO_NONE) {
+  RTnet() : _sock(-1), _tdma(-1), _if_id(0), _rtskbs(ATMD_DEF_RTSKBS), _protocol(ATMD_PROTO_NONE) {
     memset(_ifname, 0, IFNAMSIZ);
     memset(_tdma_name, 0, IFNAMSIZ);
     strncpy(_ifname, ATMD_DEF_RTIF, IFNAMSIZ);
@@ -92,21 +92,27 @@ public:
   int recv(GenMsg& packet, struct ether_addr* addr = NULL, int64_t timeout = TM_INFINITE)const;
 
   // Close socket
-  void close() {
+  int close() {
+    int retval = 0;
     if(_sock >= 0) {
-      int retval = rt_dev_close(_sock);
-      if(retval)
+      retval += rt_dev_close(_sock);
+      if(retval < 0)
         rt_syslog(ATMD_CRIT, "RTnet [close]: failed to close RT socket.");
       else
         _sock = -1;
+    } else {
+      rt_syslog(ATMD_INFO, "RTnet [close]: RT socket already closed.");
     }
     if(_tdma >= 0) {
-      int retval = rt_dev_close(_tdma);
+      retval += rt_dev_close(_tdma);
       if(retval)
         rt_syslog(ATMD_CRIT, "RTnet [close]: failed to close TDMA device.");
       else
         _tdma = -1;
+    } else {
+      rt_syslog(ATMD_INFO, "RTnet [close]: TDMA device already closed.");
     }
+    return retval;
   };
 
   // Wait for a TDMA cycle

@@ -108,9 +108,7 @@ void gen_handler(int signal, siginfo_t *si, void* context) {
     syslog(ATMD_INFO, "[BT] %s#", messages[i]);
 
   if(signal != SIGDEBUG)
-    //exit(signal);
-    // NOTE: we set terminate interrupt instead of exiting directly. In this way may we can manage to close the RT sockets.
-    terminate_interrupt = true;
+    exit(signal);
 }
 
 
@@ -229,13 +227,6 @@ int main(int argc, char * const argv[])
   }
 
 
-  // Initialize libcurl
-  if(curl_global_init(CURL_GLOBAL_ALL)) {
-    syslog(ATMD_INFO, "Failed to initialize libcurl. Exiting.");
-    return -1;
-  }
-
-
   // Opening pid file
   pid_file.open(pid_filename.c_str());
   if(!pid_file.is_open()) {
@@ -318,35 +309,51 @@ int main(int argc, char * const argv[])
   if(retval) {
     switch(retval) {
       case -EBUSY:
-        syslog(ATMD_ERR, "Failed to shadow main task. Already in Xenomai context.");
+        syslog(ATMD_CRIT, "Failed to shadow main task. Already in Xenomai context.");
         break;
 
       case -ENOMEM:
-        syslog(ATMD_ERR, "Failed to shadow main task. Not enough memory available.");
+        syslog(ATMD_CRIT, "Failed to shadow main task. Not enough memory available.");
         break;
 
       case -EEXIST:
-        syslog(ATMD_ERR, "Failed to shadow main task. Name already in use.");
+        syslog(ATMD_CRIT, "Failed to shadow main task. Name already in use.");
         break;
 
       case -EPERM:
-        syslog(ATMD_ERR, "Failed to shadow main task. Invalid context.");
+        syslog(ATMD_CRIT, "Failed to shadow main task. Invalid context.");
         break;
 
       default:
+        syslog(ATMD_CRIT, "Failed to shadow main task. Unexpected error (%d).", retval);
         break;
     }
-    curl_global_cleanup();
     return -1;
   }
 
-  // Create VirtualBoard
+
+  // Initialize libcurl
+  if(curl_global_init(CURL_GLOBAL_ALL)) {
+    rt_syslog(ATMD_CRIT, "Failed to initialize libcurl. Exiting.");
+    return -1;
+  }
+
+
+  // Create network IF and board
+  Network netif;
   VirtualBoard board(server_conf);
+
+  // Init VirtualBoard
+  bool board_init_done = false;
   board.status(ATMD_STATUS_BOOT);
-  board.init();
+  if(board.init()) {
+    rt_syslog(ATMD_CRIT, "Failed to initialize VirtualBoard.");
+    goto server_cleanup;
+  } else {
+    board_init_done = true;
+  }
 
   // Now we initialize network interface
-  Network netif;
   netif.set_address(ip_address);
   netif.set_port(listen_port);
   try {
@@ -355,16 +362,16 @@ int main(int argc, char * const argv[])
   } catch (int e) {
     switch(e) {
       case ATMD_ERR_SOCK:
-        syslog(ATMD_ERR, "Failed to initialize Network. Socket error.");
+        rt_syslog(ATMD_CRIT, "Failed to initialize Network. Socket error.");
         break;
       case ATMD_ERR_LISTEN:
-        syslog(ATMD_ERR, "Failed to initialize Network. Listen error.");
+        rt_syslog(ATMD_CRIT, "Failed to initialize Network. Listen error.");
         break;
       default:
+        rt_syslog(ATMD_CRIT, "Failed to initialize Network. Got unexpected exception (%d).", e);
         break;
     }
-    terminate_interrupt = true;
-    return -1;
+    goto server_cleanup;
   }
 
   // Define the time for which the main cycle sleep between subsequent calls to get_command
@@ -390,7 +397,7 @@ int main(int argc, char * const argv[])
 #ifdef DEBUG
           if(enable_debug)
             // If debug is eanbled, we log all commands received
-            syslog(ATMD_DEBUG, "Received command \"%s\"", command.c_str());
+            rt_syslog(ATMD_DEBUG, "Received command \"%s\"", command.c_str());
 #endif
 
           // Command execution
@@ -409,25 +416,31 @@ int main(int argc, char * const argv[])
         break;
 
     } catch(std::exception& e) {
-      syslog(ATMD_ERR, "main.cpp: caught an unexpected exception (%s).", e.what());
+      rt_syslog(ATMD_CRIT, "atmd_server.cpp: caught an unexpected exception (%s).", e.what());
       break;
 
     } catch(...) {
-      syslog(ATMD_ERR, "Network [get_command]: unknown exception.");
+      rt_syslog(ATMD_CRIT, "Network [get_command]: unknown exception.");
       break;
     }
   }
+
+  // Final cleanup
+  server_cleanup:
 
   // Set termination flag
   terminate_interrupt = true;
 
   // Explicitely call VirtualBoard destructor
-  board.~VirtualBoard();
+  if(board_init_done)
+    if(board.close())
+      rt_syslog(ATMD_ERR, "Failed to properly release all RT resources.");
 
   // CURL library cleanup
   curl_global_cleanup();
 
-  syslog(ATMD_INFO, "Terminating atmd-server version %s.", VERSION);
+  rt_syslog(ATMD_INFO, "Terminating atmd-server version %s.", VERSION);
+
   closelog();
   return 0;
 }

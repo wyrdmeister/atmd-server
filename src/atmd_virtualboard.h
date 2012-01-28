@@ -79,20 +79,13 @@ class VirtualBoard {
 public:
   // Constructor and destructor
   VirtualBoard(AtmdConfig &obj) : _config(obj) { clear_config(); };
-  ~VirtualBoard() {
-    // Join on RT tasks
-    rt_task_join(&_ctrl_task);
-    rt_task_join(&_rt_data_task);
-    rt_task_join(&_data_task);
-    // Close RT sockets
-    _ctrl_sock.close();
-    _data_sock.close();
-    // CURL cleanup
-    curl_easy_cleanup(this->easy_handle);
-  };
+  ~VirtualBoard() {};
 
   // Start all the relevant RT tasks and sends broadcasts to find agents
   int init();
+
+  // Close all sockets and wait for termination of RT tasks
+  int close();
 
   // Manage sockets
   RTnet& ctrl_sock() { return _ctrl_sock; };

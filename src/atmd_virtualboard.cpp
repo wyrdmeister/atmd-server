@@ -184,6 +184,28 @@ int VirtualBoard::init() {
 }
 
 
+/* @fn int VirtualBoard::close()
+ *
+ */
+int VirtualBoard::close() {
+  int retval = 0;
+
+  // Join on RT tasks
+  retval += rt_task_join(&_ctrl_task);
+  retval += rt_task_join(&_rt_data_task);
+  retval += rt_task_join(&_data_task);
+
+  // Close RT sockets
+  retval += _ctrl_sock.close();
+  retval += _data_sock.close();
+
+  // CURL cleanup
+  curl_easy_cleanup(easy_handle);
+
+  return retval;
+};
+
+
 /* @fn int VirtualBoard::send_command(GenMsg& packet)
  * This function sends a control message and wait for a reply. The reply is stored
  * in the same message object passed to send data.
