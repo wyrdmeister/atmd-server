@@ -366,7 +366,10 @@ void VirtualBoard::control_task(void *arg) {
     // Wait for a packet on the queue
     packet.clear();
     ctrl_size = packet.maxsize();
-    if(ctrl_if.recv(opcode, packet.get_buffer(), ctrl_size)) {
+    retval = ctrl_if.recv(opcode, packet.get_buffer(), ctrl_size, 25000000);
+    if(retval) {
+      if(retval == -EWOULDBLOCK)
+        continue;
       rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to receive a command from main thread.");
       // Terminate server
       terminate_interrupt = true;

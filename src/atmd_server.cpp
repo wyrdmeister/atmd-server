@@ -341,10 +341,11 @@ int main(int argc, char * const argv[])
 
   // Create network IF and board
   Network netif;
+  bool netif_init_done = false;
   VirtualBoard board(server_conf);
+  bool board_init_done = false;
 
   // Init VirtualBoard
-  bool board_init_done = false;
   board.status(ATMD_STATUS_BOOT);
   if(board.init()) {
     rt_syslog(ATMD_CRIT, "Failed to initialize VirtualBoard.");
@@ -373,6 +374,7 @@ int main(int argc, char * const argv[])
     }
     goto server_cleanup;
   }
+  netif_init_done = true;
 
   // Define the time for which the main cycle sleep between subsequent calls to get_command
   sleeptime.tv_sec = 0;
@@ -430,6 +432,10 @@ int main(int argc, char * const argv[])
 
   // Set termination flag
   terminate_interrupt = true;
+
+  // Explicitely close network
+  if(netif_init_done)
+    netif.close_client();
 
   // Explicitely call VirtualBoard destructor
   if(board_init_done)
