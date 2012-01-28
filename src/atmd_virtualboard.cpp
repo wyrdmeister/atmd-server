@@ -256,9 +256,13 @@ void VirtualBoard::control_task(void *arg) {
 
     while(true) {
       // Receive packet
-      retval = pthis->ctrl_sock().recv(packet, &remote_addr, 100000000);
+      retval = pthis->ctrl_sock().recv(packet, &remote_addr, 1000000000);
       if(retval) {
         if(retval == -EWOULDBLOCK) {
+#ifdef DEBUG
+          if(enable_debug)
+            rt_syslog(ATMD_DEBUG, "VirtualBoard [control_task]: timed out waiting for agents to answer. Sending another broadcast.");
+#endif
           // We timedout receive. No answer from all agents within 100ms. Resend broadcast
           break;
 
