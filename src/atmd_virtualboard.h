@@ -197,7 +197,7 @@ public:
         case ATMD_FORMAT_MATPS3:
         case ATMD_FORMAT_MATPS3_FTP:
         case ATMD_FORMAT_MATPS3_ALL:
-          return ".txt";
+          return ".mat";
     }
   }
 
