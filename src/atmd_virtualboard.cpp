@@ -826,11 +826,11 @@ void VirtualBoard::data_task(void *arg) {
       if(curr_measure) {
 #ifdef DEBUG
         if(enable_debug)
-          rt_syslog(ATMD_DEBUG, "VirtualBoard [data_task]: received termination packet. Total measure time was: %.3f s.", packet.window_time()/1e9);
+          rt_syslog(ATMD_DEBUG, "VirtualBoard [data_task]: received a termination packet. Total measure time was: %.3f s.", packet.window_time()/1e9);
 #endif
         curr_measure->add_time(packet.window_start(), packet.window_time());
       } else {
-        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: received measure terminated packet, but current measure pointer in NULL.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: received a termination packet, but current measure pointer in NULL.");
       }
     }
 
@@ -838,6 +838,10 @@ void VirtualBoard::data_task(void *arg) {
     bool measure_end = true;
     for(size_t i = 0; i < agent_end.size(); i++)
       measure_end = measure_end && agent_end[i];
+
+    // If this was a termination packet, but not every agent already finished we should check for another packet
+    if(!measure_end && packet.type() == ATMD_DT_TERM)
+      continue;
 
 
     if(pthis->get_autosave() == 0) {
