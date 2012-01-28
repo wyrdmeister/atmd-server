@@ -1153,28 +1153,16 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
   filename.erase(0,1);
 
   // Find 'user' uid
-  int bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
-  if (bufsize == -1)      // Value was indeterminate
-      bufsize = 16384;    // Should be more than enough
-
-  char * pwbuf = new char[bufsize];
-  if(pwbuf == NULL) {
-    syslog(ATMD_ERR, "VirtualBoard [save_measure]: cannot allocate buffer for getpwnam_r.");
-    return -1;
-  }
-
   uid_t uid = 0;
-  struct passwd pwd;
-  struct passwd *result;
-  int rval = getpwnam_r("user", &pwd, pwbuf, bufsize, &result);
-  if (result == NULL) {
-    if(rval == 0)
-      syslog(ATMD_WARN, "VirtualBoard [save_measure]: cannot find user 'user'.");
-    else
-      syslog(ATMD_WARN, "VirtualBoard [save_measure]: error retreiving 'user' UID (Error: %m).");
-  } else {
-    uid = pwd.pw_uid;
-  }
+  struct passwd *pwd = getpwnam("user");
+  if(pwd != NULL)
+    uid = pwd->pw_uid;
+
+  // Find 'user' gid
+  gid_t gid = 0;
+  struct group* grp = getgrnam("user");
+  if(grp != NULL)
+    gid = grp->gr_gid;
 
   // For safety the supplied path is taken relative to /home/data
   std::string fullpath = "/home/data/";
@@ -1190,13 +1178,13 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
     if(stat(fullpath.c_str(), &st) == -1) {
       if(errno == ENOENT) {
         // Path does not exist
-        if(mkdir(fullpath.c_str(), S_IRWXU | S_IRWXG)) {
+        if(mkdir(fullpath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) {
           syslog(ATMD_ERR, "VirtualBoard [save_measure]: error creating save path \"%s\" (Error: %m).", fullpath.c_str());
           return -1;
         }
 
         // Change owner to 'user'
-        if(chown(fullpath.c_str(), uid, -1)) {
+        if(chown(fullpath.c_str(), uid, gid)) {
           syslog(ATMD_WARN, "VirtualBoard [save_measure]: error changing owner for director \"%s\" (Error %m).", fullpath.c_str());
         }
 
