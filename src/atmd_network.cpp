@@ -1100,10 +1100,10 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       } else {
         if(modifier == "-") {
-          std::vector<uint32_t> stopsum(8,0);
+          std::vector<uint32_t> stopsum(8*board.agents(),0);
           uint64_t mean_window = 0;
           for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
-            for(size_t index = 0; index < 8; index++)
+            for(size_t index = 0; index < 8*board.agents(); index++)
               stopsum[index] += iter->at(index+1);
             mean_window += iter->at(0);
           }

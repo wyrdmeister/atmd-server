@@ -100,8 +100,6 @@ public:
         rt_syslog(ATMD_CRIT, "RTnet [close]: failed to close RT socket.");
       else
         _sock = -1;
-    } else {
-      rt_syslog(ATMD_INFO, "RTnet [close]: RT socket already closed.");
     }
     if(_tdma >= 0) {
       retval += rt_dev_close(_tdma);
@@ -109,8 +107,6 @@ public:
         rt_syslog(ATMD_CRIT, "RTnet [close]: failed to close TDMA device.");
       else
         _tdma = -1;
-    } else {
-      rt_syslog(ATMD_INFO, "RTnet [close]: TDMA device already closed.");
     }
     return retval;
   };
