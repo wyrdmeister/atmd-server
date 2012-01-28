@@ -421,6 +421,9 @@ int main(int argc, char * const argv[])
   // Set termination flag
   terminate_interrupt = true;
 
+  // Explicitely call VirtualBoard destructor
+  board.~VirtualBoard();
+
   // CURL library cleanup
   curl_global_cleanup();
 
