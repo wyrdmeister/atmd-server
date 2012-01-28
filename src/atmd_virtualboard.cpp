@@ -1496,7 +1496,7 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
 
   // Change owner to file
   if(_format != ATMD_FORMAT_MATPS2_FTP && _format != ATMD_FORMAT_MATPS3_FTP)
-    if(chown(fullpath.c_str(), uid, -1))
+    if(chown(fullpath.c_str(), uid, gid))
       syslog(ATMD_ERR, "Measure [save_measure]: cannot change owner of file \"%s\" (Error: %m).", fullpath.c_str());
 
   return 0;
