@@ -1107,13 +1107,21 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
               stopsum[index] += iter->at(index+1);
             mean_window += iter->at(0);
           }
-          this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", stopcount.size(), mean_window / stopcount.size(), stopsum.at(0), stopsum.at(1), stopsum.at(2), stopsum.at(3), stopsum.at(4), stopsum.at(5), stopsum.at(6), stopsum.at(7)));
+          std::stringstream command(std::stringstream::out);
+          command << "MSR STAT " << stopcount.size() << " " << mean_window / stopcount.size();
+          for(size_t index = 0; index < 8*board.agents(); index++)
+            command << " " << stopsum.at(index);
+          this->send_command(command.str());
 
         } else {
           this->send_command(this->format_command("MSR STAT NUM %u", stopcount.size()));
 
           for(std::vector< std::vector<uint32_t> >::iterator iter = stopcount.begin(); iter!=stopcount.end(); ++iter) {
-            this->send_command(this->format_command("MSR STAT %u %u %u %u %u %u %u %u %u %u", iter - stopcount.begin() + 1, iter->at(0), iter->at(1), iter->at(2), iter->at(3), iter->at(4), iter->at(5), iter->at(6), iter->at(7), iter->at(8)));
+            std::stringstream command(std::stringstream::out);
+            command << "MSR STAT " << iter - stopcount.begin() + 1 << " " << iter->at(0);
+            for(size_t index = 0; index < 8*board.agents(); index++)
+              command << " " << iter->at(index+1);
+            this->send_command(command.str());
           }
         }
       }

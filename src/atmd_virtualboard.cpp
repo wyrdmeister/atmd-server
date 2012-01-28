@@ -1733,7 +1733,7 @@ int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<u
     stop_counts.push_back(stops_ch);
 
     // We reset the counts
-    for(size_t j = 0; j < 9; j++)
+    for(size_t j = 0; j < 1+8*agents(); j++)
       stops_ch[j] = 0;
   }
 
@@ -1795,7 +1795,7 @@ int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<u
       stop_counts.push_back(stops_ch);
 
       // We reset the counts
-      for(size_t j = 0; j < 9; j++)
+      for(size_t j = 0; j < 1+8*agents(); j++)
         stops_ch[j] = 0;
     }
 
