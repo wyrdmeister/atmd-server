@@ -297,6 +297,16 @@ int main(int argc, char * const argv[])
   if(!freopen( "/dev/null", "w", stderr))
     syslog(ATMD_WARN, "Cannot redirect stderr to \"/dev/null\" (Error: %m).");
 
+  // Increase base process priority
+  errno = 0;
+  if(setpriority(PRIO_PROCESS, 0, -10) == -1) {
+    if(errno != 0) {
+      syslog(ATMD_ERR, "Failed to increase base process priority (Error: \"%m\").");
+      munlockall();
+      return -1;
+    }
+  }
+
   // Sleep...
   struct timespec sleeptime;
   sleeptime.tv_sec = 1;
