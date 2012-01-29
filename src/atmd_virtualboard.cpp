@@ -1604,7 +1604,7 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
   if(_format != ATMD_FORMAT_MATPS2_FTP && _format != ATMD_FORMAT_MATPS3_FTP) {
     if(chown(fullpath.c_str(), uid, gid))
       rt_syslog(ATMD_ERR, "Measure [measure2file]: cannot change owner of file \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
-    if(chmod(fullpath.c_str(), S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH))
+    if(chmod(fullpath.c_str(), S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH))
       rt_syslog(ATMD_ERR, "Measure [measure2file]: cannot change mode of file \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
   }
 
