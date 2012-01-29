@@ -171,6 +171,10 @@ StartData* StartData::merge(const std::vector<StartData*>& svec) {
     else
       syslog(ATMD_ERR, "Measure [add_start]: StartData was missing the window start and duration.");
   }
+
+  // Add tbin
+  merged->set_tbin(svec[0]->get_tbin());
+
   return merged;
 }
 
