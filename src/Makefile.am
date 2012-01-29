@@ -14,7 +14,8 @@ atmd_server_SOURCES = \
 	atmd_measure.cpp \
 	atmd_rtqueue.cpp \
 	atmd_rtcomm.cpp \
-	MatFile.cpp
+	MatFile.cpp \
+	std_fileno.cpp
 
 atmd_agent_SOURCES = \
 	atmd_agent.cpp \

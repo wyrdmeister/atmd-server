@@ -48,6 +48,7 @@
 #include "atmd_rtcomm.h"
 #include "atmd_monitor.h"
 #include "MatFile.h"
+#include "std_fileno.h"
 
 
 /* @class AgentDescriptor

@@ -1308,6 +1308,9 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
     fullurl.append(filename);
   }
 
+  // File descriptor for lock
+  int lock_fd = -1;
+
   if(_format != ATMD_FORMAT_MATPS2_FTP && _format != ATMD_FORMAT_MATPS3_FTP) {
 
     // Opening file
@@ -1332,6 +1335,7 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
           rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: cannot open Matlab file %s.", fullpath.c_str());
           return -1;
         }
+        lock_fd = mat_savefile.fd();
         break;
 
       case ATMD_FORMAT_RAW:
@@ -1344,10 +1348,19 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
           rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: error opening text file \"%s\".", fullpath.c_str());
           return -1;
         }
+        lock_fd = fileno(savefile);
         break;
     }
 
-    rt_syslog(ATMD_INFO, "VirtualBoard [measure2file]: saving to file \"%s\".", fullpath.c_str());
+    rt_syslog(ATMD_INFO, "VirtualBoard [measure2file]: saving to file \"%s\". File descriptor: (%d)", fullpath.c_str(), lock_fd);
+  }
+
+  // Acquire lock on file
+  if(lock_fd >= 0) {
+    if(lockf(lock_fd, F_TLOCK, 0))
+      rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: error locking file. Error: '%s'.", strerror(errno));
+    else
+      rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: successfully locked file (%d)", lock_fd);
   }
 
   StartData* current_start;
@@ -1562,6 +1575,13 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
       break;
   }
 
+  // Release lock on file
+  if(lock_fd >= 0) {
+    if(lockf(lock_fd, F_ULOCK, 0))
+      rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: error releasing lock on file. Error: '%s'.", strerror(errno));
+    else
+      rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: successfully release lock on file (%d)", lock_fd);
+  }
 
   switch(_format) {
     case ATMD_FORMAT_RAW:

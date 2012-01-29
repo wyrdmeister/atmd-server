@@ -37,6 +37,7 @@
 #include <string>
 #include <typeinfo>
 #include <stdint.h>
+#include <std_fileno.h>
 
 /* Mat header */
 #define MAT_HEADER "MATLAB 5.0 MAT-file, Platform: PCWIN, Created on: "
@@ -97,6 +98,8 @@ public:
 	}
 	int32_t get_pos() { return file.tellg(); }
 	void set_pos(int32_t pos) { file.seekg(pos, std::ios::beg); }
+
+	int fd()const { return fileno(file); };
 
 private:
 	std::fstream file;
