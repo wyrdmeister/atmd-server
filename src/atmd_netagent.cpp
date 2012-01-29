@@ -433,6 +433,10 @@ int DataMsg::encode() {
     // Window duration
     offset = serialize<uint64_t>(_buffer, offset, _window_time);
 
+    // Set size
+    _size = offset;
+    return 0;
+
   } else {
     return -1;
   }
