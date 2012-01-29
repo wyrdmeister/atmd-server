@@ -839,10 +839,6 @@ void VirtualBoard::data_task(void *arg) {
     for(size_t i = 0; i < agent_end.size(); i++)
       measure_end = measure_end && agent_end[i];
 
-    // If this was a termination packet, but not every agent already finished we should check for another packet
-    if(!measure_end && packet.type() == ATMD_DT_TERM)
-      continue;
-
 
     if(pthis->get_autosave() == 0) {
       // No autosave
@@ -1051,6 +1047,9 @@ void VirtualBoard::data_task(void *arg) {
         curr_start[agent_id]->set_tbin(pthis->get_tbin());
         curr_start_id[agent_id] = packet.id();
 
+      } else if(packet.type() == ATMD_DT_TERM) {
+        continue;
+
       } else {
         // Error! We missed the first packet or something very bad happened
         rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: missed the first packet of a data sequence. Discarding current start.");
@@ -1062,12 +1061,11 @@ void VirtualBoard::data_task(void *arg) {
       // The order of packets from a single agent is guaranteed, but it is not between different agents.
       // We need to handle out of sequence packets (maybe we can implement a FIFO of out of sequence packets that will be processed after the current start is over)
       if(curr_start_id[agent_id] != packet.id()) {
-        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: packet out of squence! PANIC!");
+        rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: packet out of sequence! PANIC!");
         // TODO: handle out of sequence packets
         continue;
       }
     }
-
 
     // Extract events from packet
     for(size_t i = 0; i < packet.numev(); i++) {
