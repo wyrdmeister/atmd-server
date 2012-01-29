@@ -564,19 +564,33 @@ int atmd_send_start(uint32_t id, EventData& events, RTnet* sock, const struct et
   packet.window_start(events.begin());
   packet.window_time(events.end()-events.begin());
 
-  // Cycle through events
-  size_t count = 0;
-  while(count < events.size()) {
-    // Build packet
-    if(count > 0)
-      packet.clear();
+  // Check if the start is empty
+  if(events.size() == 0) {
+    // If the start is empty we should send anyway a packet of type ATMD_DT_ONLY without any event
+    // If we do not do so, the master will go panic because of out of sequence events (the first start will never end...).
+    packet.type(ATMD_DT_ONLY);
     packet.id(id);
-    count = packet.encode(count, events.ch(), events.stoptime(), events.retrig());
-
-    // Send packet
+    packet.encode();
     if(sock->send(packet, addr)) {
       rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message over RTnet.");
       return -1;
+    }
+
+  } else {
+    // Cycle through events
+    size_t count = 0;
+    while(count < events.size()) {
+      // Build packet
+      if(count > 0)
+        packet.clear();
+      packet.id(id);
+      count = packet.encode(count, events.ch(), events.stoptime(), events.retrig());
+
+      // Send packet
+      if(sock->send(packet, addr)) {
+        rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message over RTnet.");
+        return -1;
+      }
     }
   }
 

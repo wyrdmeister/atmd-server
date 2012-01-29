@@ -404,6 +404,35 @@ int DataMsg::encode() {
     _size = offset;
     return 0;
 
+
+  } else if(_type == ATMD_DT_ONLY) {
+    // We got an empty start and we should anyway send a message to the master
+
+    // Clear buffer
+    memset(_buffer, 0, ATMD_PACKET_SIZE);
+
+    size_t offset = 0;
+
+    // Set type
+    offset = serialize<uint16_t>(_buffer, offset, _type);
+
+    // Set number of events to zero
+    _numev = 0;
+    offset = serialize<uint16_t>(_buffer, offset, _numev);
+
+    // Set start ID
+    offset = serialize<uint32_t>(_buffer, offset, _id);
+
+    // Total number of events
+    _total_events = 0;
+    offset = serialize<uint32_t>(_buffer, offset, _total_events);
+
+    // Window start time
+    offset = serialize<uint64_t>(_buffer, offset, _window_start);
+
+    // Window duration
+    offset = serialize<uint64_t>(_buffer, offset, _window_time);
+
   } else {
     return -1;
   }
