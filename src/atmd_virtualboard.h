@@ -46,6 +46,7 @@
 #include "atmd_measure.h"
 #include "atmd_rtqueue.h"
 #include "atmd_rtcomm.h"
+#include "atmd_monitor.h"
 #include "MatFile.h"
 
 
@@ -199,6 +200,22 @@ public:
   void set_autosave(uint32_t val) { _autosave = val; };
   uint32_t get_autosave()const { return _autosave; };
 
+  // Setup monitor
+  void set_monitor(uint32_t n, uint32_t m, const std::string& name) {
+    _monitor_n = n;
+    _monitor_m = m;
+    _monitor_name = name;
+  };
+  bool get_monitor(uint32_t& n, uint32_t& m, std::string& name)const {
+    n = _monitor_n;
+    m = _monitor_m;
+    name = _monitor_name;
+    if(_monitor_name == "")
+      return false;
+    else
+      return true;
+  };
+
 
   // == Measure handling ==
 
@@ -244,7 +261,16 @@ public:
   };
 
   // Save measure
-  int save_measure(size_t measure_number, std::string filename);
+  int save_measure(size_t measure_num, const std::string& filename);
+
+  // Save monitor
+  int save_monitor(Monitor& mon);
+
+private:
+  // General save routine
+  int measure2file(const std::vector<StartData*>& starts, const std::vector<uint64_t>& begin, const std::vector<uint64_t>& time, std::string filename);
+
+public:
 
   // CURL callback
   static size_t curl_read(void *ptr, size_t size, size_t count, void *data);
@@ -345,6 +371,11 @@ private:
 
   // Save format
   uint32_t _format;
+
+  // Monitor parameters
+  uint32_t _monitor_n;
+  uint32_t _monitor_m;
+  std::string _monitor_name;
 
 
   // == Measures handling ==

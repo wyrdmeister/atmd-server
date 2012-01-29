@@ -42,7 +42,7 @@ int VirtualBoard::init() {
 
   // Init libCURL
   if((this->easy_handle = curl_easy_init()) == NULL) {
-    syslog(ATMD_INFO, "Board init: failed to initialize libcurl.");
+    rt_syslog(ATMD_INFO, "Board init: failed to initialize libcurl.");
     return -1;
   }
   memset(this->curl_error, 0x0, CURL_ERROR_SIZE);
@@ -53,19 +53,19 @@ int VirtualBoard::init() {
   if(retval) {
     switch(retval) {
       case -ENOMEM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed. Not enough memory.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed. Not enough memory.");
         break;
 
       case -EEXIST:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed. The given name is already in use.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed. The given name is already in use.");
         break;
 
       case -EPERM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed. Called from an invalid context.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed. Called from an invalid context.");
         break;
 
       default:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed with an unexpected return code (%d).", retval);
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_mutex_create() failed with an unexpected return code (%d).", retval);
         break;
     }
     return -1;
@@ -73,7 +73,7 @@ int VirtualBoard::init() {
 
   // Init the data queue
   if(_data_queue.init(ATMD_RT_DATA_QUEUE, 10000000)) {
-    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to initialize RT data queue.");
+    rt_syslog(ATMD_CRIT, "VirtualBoard [init]: failed to initialize RT data queue.");
     return -1;
   }
 
@@ -83,12 +83,12 @@ int VirtualBoard::init() {
   _ctrl_sock.interface( (strlen(_config.rtif()) > 0) ? _config.rtif() : ATMD_DEF_RTIF );
   _ctrl_sock.tdma_dev( (strlen(_config.tdma_dev()) > 0) ? _config.tdma_dev() : ATMD_DEF_TDMA );
   if(_ctrl_sock.init(true)) {
-    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet control socket.");
+    rt_syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet control socket.");
     return -1;
   }
 #ifdef DEBUG
   if(enable_debug)
-    syslog(ATMD_DEBUG, "VirtualBoard [init]: successfully create RTnet control socket.");
+    rt_syslog(ATMD_DEBUG, "VirtualBoard [init]: successfully create RTnet control socket.");
 #endif
 
   // Init the RT data socket
@@ -97,12 +97,12 @@ int VirtualBoard::init() {
   _data_sock.interface( (strlen(_config.rtif()) > 0) ? _config.rtif() : ATMD_DEF_RTIF );
   _data_sock.tdma_dev( (strlen(_config.tdma_dev()) > 0) ? _config.tdma_dev() : ATMD_DEF_TDMA );
   if(_data_sock.init(true)) {
-    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet data socket.");
+    rt_syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init RTnet data socket.");
     return -1;
   }
 #ifdef DEBUG
   if(enable_debug)
-    syslog(ATMD_DEBUG, "VirtualBoard [init]: successfully create RTnet data socket.");
+    rt_syslog(ATMD_DEBUG, "VirtualBoard [init]: successfully create RTnet data socket.");
 #endif
 
   // The first thing to do is to start the control RT thread
@@ -110,19 +110,19 @@ int VirtualBoard::init() {
   if(retval) {
     switch(retval) {
       case -ENOMEM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because not enough memory was available to create the task.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because not enough memory was available to create the task.");
         break;
 
       case -EEXIST:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because the given name is already in use.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because the given name is already in use.");
         break;
 
       case -EPERM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because called from an invalid context.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because called from an invalid context.");
         break;
 
       default:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed with an unexpected return code (%d).", retval);
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed with an unexpected return code (%d).", retval);
         break;
     }
     return -1;
@@ -130,7 +130,7 @@ int VirtualBoard::init() {
 
   // Init the control interface
   if(_ctrl_if.init(&_ctrl_task)) {
-    syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init control interface.");
+    rt_syslog(ATMD_CRIT, "VirtualBoard [init]: failed to init control interface.");
     return -1;
   }
 
@@ -139,19 +139,19 @@ int VirtualBoard::init() {
   if(retval) {
     switch(retval) {
       case -ENOMEM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because not enough memory was available to create the task.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because not enough memory was available to create the task.");
         break;
 
       case -EEXIST:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because the given name is already in use.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because the given name is already in use.");
         break;
 
       case -EPERM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because called from an invalid context.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because called from an invalid context.");
         break;
 
       default:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed with an unexpected return code (%d).", retval);
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed with an unexpected return code (%d).", retval);
         break;
     }
     return -1;
@@ -162,19 +162,19 @@ int VirtualBoard::init() {
   if(retval) {
     switch(retval) {
       case -ENOMEM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because not enough memory was available to create the task.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because not enough memory was available to create the task.");
         break;
 
       case -EEXIST:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because the given name is already in use.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because the given name is already in use.");
         break;
 
       case -EPERM:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because called from an invalid context.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed because called from an invalid context.");
         break;
 
       default:
-        syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed with an unexpected return code (%d).", retval);
+        rt_syslog(ATMD_CRIT, "VirtualBoard [init]: rt_task_spawn() failed with an unexpected return code (%d).", retval);
         break;
     }
     return -1;
@@ -213,7 +213,7 @@ int VirtualBoard::close() {
 int VirtualBoard::send_command(int& opcode, GenMsg& packet) {
   size_t sz = packet.maxsize();
   if(_ctrl_if.send(opcode, packet.get_buffer(), packet.size(), packet.get_buffer(), &sz)) {
-    syslog(ATMD_ERR, "VirtualBoard [send_command]: failed to send control command.");
+    rt_syslog(ATMD_ERR, "VirtualBoard [send_command]: failed to send control command.");
     return -1;
   }
   return 0;
@@ -770,6 +770,9 @@ void VirtualBoard::data_task(void *arg) {
   // Current measure
   Measure* curr_measure = NULL;
 
+  // Monitor object
+  Monitor mon;
+
   // Buffer
   char msg[sizeof(size_t)+ATMD_PACKET_SIZE];
 
@@ -818,6 +821,9 @@ void VirtualBoard::data_task(void *arg) {
       // Reset current start id
       for(size_t i = 0; i < pthis->agents(); i++)
         curr_start_id[i] = 0;
+
+      // We are starting a new measure. Setup monitor
+      mon.setup(pthis->_monitor_n, pthis->_monitor_n);
     }
 
     // If packet type is ATMD_DT_TERM, the measure has ended (at least for the current agent)
@@ -911,6 +917,10 @@ void VirtualBoard::data_task(void *arg) {
         for(size_t i = 0; i < pthis->agents(); i++)
           agent_end[i] = false;
 
+        // Measure ended. Clear monitor if needed
+        if(mon.enabled())
+          mon.clear();
+
         // Reset board status
         pthis->status(ATMD_STATUS_IDLE);
         continue;
@@ -969,11 +979,6 @@ void VirtualBoard::data_task(void *arg) {
             curr_measure = new Measure;
           } else {
             curr_measure = NULL;
-            // Reset end flags
-            for(size_t i = 0; i < pthis->agents(); i++)
-              agent_end[i] = false;
-            // Set board status to IDLE
-            pthis->status(ATMD_STATUS_IDLE);
           }
 
           // We format the filename
@@ -1027,11 +1032,12 @@ void VirtualBoard::data_task(void *arg) {
             for(size_t i = 0; i < pthis->agents(); i++)
               agent_end[i] = false;
 
+            // Measure ended. Clear monitor if needed
+            if(mon.enabled())
+              mon.clear();
+
             // Set status
             pthis->status(ATMD_STATUS_IDLE);
-
-            // Reset measure counter
-            pthis->reset_counter();
 
             continue;
           }
@@ -1062,6 +1068,7 @@ void VirtualBoard::data_task(void *arg) {
       // We need to handle out of sequence packets (maybe we can implement a FIFO of out of sequence packets that will be processed after the current start is over)
       if(curr_start_id[agent_id] != packet.id()) {
         rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: packet out of sequence! PANIC!");
+        rt_syslog(ATMD_INFO, "VirtualBoard [data_task]: agent '%s' sent a packet with start ID (%d) while we are still receiving start (%d).", ether_ntoa(pthis->get_agent(agent_id).agent_addr()), packet.id(), curr_start_id[agent_id]);
         // TODO: handle out of sequence packets
         continue;
       }
@@ -1087,6 +1094,14 @@ void VirtualBoard::data_task(void *arg) {
 
     // If all agent are done, add start to measure
     if(start_end) {
+      // If monitor is enabled
+      if(mon.enabled()) {
+        // Add start
+        mon.add_start(curr_start);
+        // Try to save
+        pthis->save_monitor(mon);
+      }
+
       // Add current start to curr_measure
       curr_measure->add_start(curr_start);
       for(size_t i = 0; i < curr_start.size(); i++)
@@ -1153,6 +1168,10 @@ void VirtualBoard::clear_config() {
   // Reset board status
   _status = ATMD_STATUS_IDLE;
 
+  // Monitor parameters
+  _monitor_n = 0;
+  _monitor_m = 0;
+  _monitor_name = "";
 }
 
 
@@ -1163,16 +1182,59 @@ void VirtualBoard::clear_config() {
  * @param filename The filename including complete path.
  * @return Return 0 on success, -1 on error.
  */
-int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
-
-  std::fstream savefile;
-  MatFile mat_savefile;
+int VirtualBoard::save_measure(size_t measure_num, const std::string& filename) {
 
   // Check if the measure number is valid.
-  if(measure_number < 0 || measure_number >= this->measures()) {
-    syslog(ATMD_ERR, "VirtualBoard [save_measure]: trying to save a non existent measure.");
+  if(measure_num < 0 || measure_num >= this->measures()) {
+    rt_syslog(ATMD_ERR, "VirtualBoard [save_measure]: trying to save a non existent measure.");
     return -1;
   }
+
+  return measure2file(_measures[measure_num]->starts, _measures[measure_num]->measure_begin, _measures[measure_num]->measure_time, filename);
+}
+
+
+/* @fn int VirtualBoard::save_monitor(Monitor& mon)
+ *
+ * @param ...
+ * @return Return 0 on success, -1 on error.
+ */
+int VirtualBoard::save_monitor(Monitor& mon) {
+
+  if(mon._count >= _monitor_n) {
+    // Compile measure times
+    std::vector<uint64_t> measure_begin;
+    std::vector<uint64_t> measure_time;
+
+    for(size_t i = 0; i < agents(); i++) {
+      if(mon._data.front()->times() > i) {
+        measure_begin.push_back(mon._data.front()->get_window_begin(i));
+        measure_time.push_back(mon._data.back()->get_window_begin(i)+mon._data.back()->get_window_time(i));
+      }
+    }
+
+    // Save
+    mon._count = 0;
+    return measure2file(mon._data, measure_begin, measure_time, _monitor_name);
+
+  } else {
+    mon._count++;
+    return 0;
+  }
+}
+
+
+/* @fn int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std::vector<uint64_t>& begin, const std::vector<uint64_t>& time, std::string filename)
+ * Save a vector of starts to a file in the specified format.
+ *
+ * @param ...
+ * @return Return 0 on success, -1 on error.
+ */
+int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std::vector<uint64_t>& begin, const std::vector<uint64_t>& time, std::string filename) {
+
+  // File handles
+  std::fstream savefile;
+  MatFile mat_savefile;
 
   // For safety we remove all relative path syntax
   pcrecpp::RE("\\.\\.\\/").GlobalReplace("", &filename);
@@ -1206,18 +1268,18 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
       if(errno == ENOENT) {
         // Path does not exist
         if(mkdir(fullpath.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH)) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: error creating save path \"%s\" (Error: %m).", fullpath.c_str());
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: error creating save path \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
           return -1;
         }
 
         // Change owner to 'user'
         if(chown(fullpath.c_str(), uid, gid)) {
-          syslog(ATMD_WARN, "VirtualBoard [save_measure]: error changing owner for director \"%s\" (Error %m).", fullpath.c_str());
+          rt_syslog(ATMD_WARN, "VirtualBoard [measure2file]: error changing owner for director \"%s\" (Error %s).", fullpath.c_str(), strerror(errno));
         }
 
       } else {
         // Error
-        syslog(ATMD_ERR, "VirtualBoard [save_measure]: error checking save path \"%s\" (Error: %m).", fullpath.c_str());
+        rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: error checking save path \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
         return -1;
       }
     }
@@ -1228,7 +1290,7 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
   std::string fullurl = "";
   if(_format == ATMD_FORMAT_MATPS2_FTP || _format == ATMD_FORMAT_MATPS2_ALL || _format == ATMD_FORMAT_MATPS3_FTP || _format == ATMD_FORMAT_MATPS3_ALL) {
     if(this->_hostname == "") {
-      syslog(ATMD_ERR, "VirtualBoard [save_measure]: requested to save a measure using FTP but hostname is not set.");
+      rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: requested to save a measure using FTP but hostname is not set.");
       return -1;
     }
 
@@ -1252,11 +1314,11 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
     switch(_format) {
       case ATMD_FORMAT_BINPS:
       case ATMD_FORMAT_BINRAW:
-        syslog(ATMD_ERR, "VirtualBoard [save_measure]: binary format is not supported any more.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: binary format is not supported any more.");
         return -1;
 
       case ATMD_FORMAT_DEBUG:
-        syslog(ATMD_ERR, "VirtualBoard [save_measure]: debug text format is not supported any more.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: debug text format is not supported any more.");
         return -1;
 
       case ATMD_FORMAT_MATPS1:
@@ -1267,7 +1329,7 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
       case ATMD_FORMAT_MATPS3_ALL:
         mat_savefile.open(fullpath);
         if(!mat_savefile.IsOpen()) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: cannot open Matlab file %s.", fullpath.c_str());
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: cannot open Matlab file %s.", fullpath.c_str());
           return -1;
         }
         break;
@@ -1279,17 +1341,16 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
         savefile.open(fullpath.c_str(), std::fstream::out | std::fstream::trunc);
         savefile.precision(15);
         if(!savefile.is_open()) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: error opening text file \"%s\".", fullpath.c_str());
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: error opening text file \"%s\".", fullpath.c_str());
           return -1;
         }
         break;
     }
 
-    syslog(ATMD_INFO, "VirtualBoard [save_measure]: saving measure %lu to file \"%s\".", measure_number, fullpath.c_str());
+    rt_syslog(ATMD_INFO, "VirtualBoard [measure2file]: saving to file \"%s\".", fullpath.c_str());
   }
 
   StartData* current_start;
-  uint32_t start_count = this->_measures[measure_number]->count_starts();
 
   double stoptime;
   int8_t channel;
@@ -1324,9 +1385,9 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
         txtbuffer << "start\tchannel\tslope\tstoptime" << std::endl;
 
       // We cycle over all starts
-      for(size_t i = 0; i < start_count; i++) {
-        if(!(current_start = this->_measures[measure_number]->get_start(i))) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: trying to save a non existent start.");
+      for(size_t i = 0; i < starts.size(); i++) {
+        if(!(current_start = starts[i])) {
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: trying to save a non existent start.");
           return -1;
         }
 
@@ -1360,24 +1421,22 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
 
       /* First of all we should count all the events */
       num_events = 0;
-      for(size_t i = 0; i < start_count; i++) {
-        if(!(current_start = this->_measures[measure_number]->get_start(i))) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: trying to stat a non existent start.");
+      for(size_t i = 0; i < starts.size(); i++) {
+        if(!(current_start = starts[i])) {
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: trying to stat a non existent start.");
           return -1;
         }
         num_events += current_start->count_stops();
       }
 
       // Measure times
-      measure_begin.resize(agents(),2);
-      measure_time.resize(agents(),2);
-      for(size_t i = 0; i < agents(); i++) {
-        if(_measures[measure_number]->times() > i) {
-          measure_begin(i,0) = this->_measures[measure_number]->get_begin(i) / 1000000000;
-          measure_begin(i,1) = this->_measures[measure_number]->get_begin(i) % 1000000000;
-          measure_time(i,0) = this->_measures[measure_number]->get_time(i) / 1000000000;
-          measure_time(i,1) = this->_measures[measure_number]->get_time(i) % 1000000000;
-        }
+      measure_begin.resize(begin.size(),2);
+      measure_time.resize(time.size(),2);
+      for(size_t i = 0; i < begin.size(); i++) {
+        measure_begin(i,0) = begin[i] / 1000000000;
+        measure_begin(i,1) = (begin[i] % 1000000000) / 1000;
+        measure_time(i,0) = time[i] / 1000000000;
+        measure_time(i,1) = (time[i] % 1000000000) / 1000;
       }
 
       // Vector resizes
@@ -1390,13 +1449,13 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
       }
 
       if(_format == ATMD_FORMAT_MATPS3 || _format == ATMD_FORMAT_MATPS3_FTP || _format == ATMD_FORMAT_MATPS3_ALL)
-        stat_times.resize(start_count, 2 * agents());
+        stat_times.resize(starts.size(), 2 * agents());
 
       // Save data
       ev_ind = 0;
-      for(size_t i = 0; i < start_count; i++) {
-        if(!(current_start = this->_measures[measure_number]->get_start(i))) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: trying to save a non existent start.");
+      for(size_t i = 0; i < starts.size(); i++) {
+        if(!(current_start = starts[i])) {
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: trying to save a non existent start.");
           return -1;
         }
         // Save data
@@ -1421,7 +1480,7 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
           size_t k = current_start->times();
           if(k > agents()) {
             k = agents();
-            syslog(ATMD_WARN, "VirtualBoard [save_measure]: found a start that had more timings than the number of agents.");
+            rt_syslog(ATMD_WARN, "VirtualBoard [measure2file]: found a start that had more timings than the number of agents.");
           }
           for(size_t j = 0; j < k; j++) {
             stat_times(i,2*j) = (uint32_t)( current_start->get_window_begin(j) / 1000 );
@@ -1475,11 +1534,11 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
         curl_easy_setopt(this->easy_handle, CURLOPT_READDATA, (void*) &matobj);
         curl_easy_setopt(this->easy_handle, CURLOPT_INFILESIZE_LARGE, (curl_off_t)matobj.total_size());
 
-        syslog(ATMD_INFO, "VirtualBoard [save_measure]: remotely saving measurement to \"%s/%s\".", this->_hostname.c_str(), filename.c_str());
+        rt_syslog(ATMD_INFO, "VirtualBoard [measure2file]: remotely saving measurement to \"%s/%s\".", this->_hostname.c_str(), filename.c_str());
 
 #ifdef DEBUG
         if(enable_debug)
-          syslog(ATMD_DEBUG, "VirtualBoard [save_measure]: full url: %s.", fullurl.c_str());
+          rt_syslog(ATMD_DEBUG, "VirtualBoard [measure2file]: full url: %s.", fullurl.c_str());
 #endif
 
         // Start network transfer
@@ -1487,18 +1546,18 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
         gettimeofday(&t_begin, NULL);
 
         if(curl_easy_perform(this->easy_handle)) {
-          syslog(ATMD_ERR, "VirtualBoard [save_measure]: failed to transfer file with libcurl with error \"%s\".", this->curl_error);
+          rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: failed to transfer file with libcurl with error \"%s\".", this->curl_error);
           return -1;
         }
 
         // We measure elapsed time for statistic purposes
         gettimeofday(&t_end, NULL);
-        syslog(ATMD_INFO, "VirtualBoard [save_measure]: remote save performed in %fs.", (double)(t_end.tv_sec - t_begin.tv_sec) + (double)(t_end.tv_usec - t_begin.tv_usec) / 1e6);
+        rt_syslog(ATMD_INFO, "VirtualBoard [measure2file]: remote save performed in %fs.", (double)(t_end.tv_sec - t_begin.tv_sec) + (double)(t_end.tv_usec - t_begin.tv_usec) / 1e6);
       }
       break;
 
     case ATMD_FORMAT_MATRAW: /* Raw Matlab format with separate variables for start, channel, retriger count and stoptime */
-      syslog(ATMD_ERR, "VirtualBoard [save_measure]: raw MAT format is not yet implemented.");
+      rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: raw MAT format is not yet implemented.");
       return -1;
       break;
   }
@@ -1522,9 +1581,12 @@ int VirtualBoard::save_measure(size_t measure_number, std::string filename) {
   }
 
   // Change owner to file
-  if(_format != ATMD_FORMAT_MATPS2_FTP && _format != ATMD_FORMAT_MATPS3_FTP)
+  if(_format != ATMD_FORMAT_MATPS2_FTP && _format != ATMD_FORMAT_MATPS3_FTP) {
     if(chown(fullpath.c_str(), uid, gid))
-      syslog(ATMD_ERR, "Measure [save_measure]: cannot change owner of file \"%s\" (Error: %m).", fullpath.c_str());
+      rt_syslog(ATMD_ERR, "Measure [measure2file]: cannot change owner of file \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
+    if(chmod(fullpath.c_str(), S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH))
+      rt_syslog(ATMD_ERR, "Measure [measure2file]: cannot change mode of file \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
+  }
 
   return 0;
 }
@@ -1599,7 +1661,7 @@ int VirtualBoard::start_measure() {
 
     // Send configuration packet
     if(send_command(opcode, packet)) {
-      syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
+      rt_syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
       // Terminate server
       terminate_interrupt = true;
       return -1;
@@ -1608,17 +1670,17 @@ int VirtualBoard::start_measure() {
     // Check answer
     packet.decode();
     if(packet.type() == ATMD_CMD_ERROR) {
-      syslog(ATMD_ERR, "VirtualBoard [start_measure]: error sending configuration to agent with address '%s'.", ether_ntoa(get_agent(i).agent_addr()));
+      rt_syslog(ATMD_ERR, "VirtualBoard [start_measure]: error sending configuration to agent with address '%s'.", ether_ntoa(get_agent(i).agent_addr()));
       _status = ATMD_STATUS_ERR;
       return -1;
     } else if(packet.type() == ATMD_CMD_BUSY) {
-      syslog(ATMD_ERR, "VirtualBoard [start_measure]: agent with address '%s' was busy while sending configuration.", ether_ntoa(get_agent(i).agent_addr()));
+      rt_syslog(ATMD_ERR, "VirtualBoard [start_measure]: agent with address '%s' was busy while sending configuration.", ether_ntoa(get_agent(i).agent_addr()));
       _status = ATMD_STATUS_ERR;
       return -1;
     } else {
 #ifdef DEBUG
       if(enable_debug)
-        syslog(ATMD_DEBUG, "VirtualBoard [start_measure]: agent with address '%s' was correctly configured.", ether_ntoa(get_agent(i).agent_addr()));
+        rt_syslog(ATMD_DEBUG, "VirtualBoard [start_measure]: agent with address '%s' was correctly configured.", ether_ntoa(get_agent(i).agent_addr()));
 #endif
     }
   }
@@ -1629,7 +1691,7 @@ int VirtualBoard::start_measure() {
   packet.action(ATMD_ACTION_START);
   packet.encode();
   if(send_command(opcode, packet)) {
-    syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
+    rt_syslog(ATMD_CRIT, "VirtualBoard [start_measure]: failed to send a command to the queue.");
     // Terminate server
     terminate_interrupt = true;
     return -1;
@@ -1641,18 +1703,18 @@ int VirtualBoard::start_measure() {
     return 0;
 
   if(packet.type() == ATMD_CMD_ERROR) {
-    syslog(ATMD_ERR, "VirtualBoard [start_measure]: error sending start command.");
+    rt_syslog(ATMD_ERR, "VirtualBoard [start_measure]: error sending start command.");
     _status = ATMD_STATUS_ERR;
     return -1;
   }
 
   if(packet.type() == ATMD_CMD_BUSY) {
-    syslog(ATMD_ERR, "VirtualBoard [start_measure]: agents where busy while sending start command.");
+    rt_syslog(ATMD_ERR, "VirtualBoard [start_measure]: agents where busy while sending start command.");
     _status = ATMD_STATUS_ERR;
     return -1;
   }
 
-  syslog(ATMD_ERR, "VirtualBoard [start_measure]: got bad answer type while sending start command.");
+  rt_syslog(ATMD_ERR, "VirtualBoard [start_measure]: got bad answer type while sending start command.");
   _status = ATMD_STATUS_ERR;
   return -1;
 }
@@ -1675,7 +1737,7 @@ int VirtualBoard::stop_measure() {
   packet.action(ATMD_ACTION_STOP);
   packet.encode();
   if(send_command(opcode, packet)) {
-    syslog(ATMD_CRIT, "VirtualBoard [stop_measure]: failed to send a control command.");
+    rt_syslog(ATMD_CRIT, "VirtualBoard [stop_measure]: failed to send a control command.");
     // Terminate server
     terminate_interrupt = true;
     return -1;
@@ -1687,12 +1749,12 @@ int VirtualBoard::stop_measure() {
     return 0;
 
   if(packet.type() == ATMD_CMD_ERROR) {
-    syslog(ATMD_ERR, "VirtualBoard [stop_measure]: error sending stop command.");
+    rt_syslog(ATMD_ERR, "VirtualBoard [stop_measure]: error sending stop command.");
     _status = ATMD_STATUS_ERR;
     return -1;
   }
 
-  syslog(ATMD_ERR, "VirtualBoard [stop_measure]: got bad answer type while sending stop command.");
+  rt_syslog(ATMD_ERR, "VirtualBoard [stop_measure]: got bad answer type while sending stop command.");
   _status = ATMD_STATUS_ERR;
   return -1;
 }
@@ -1709,7 +1771,7 @@ int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<u
 
   // Check if the measure number is valid.
   if(measure_number < 0 || measure_number >= this->measures()) {
-    syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to get statistics about a non existent measure.");
+    rt_syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to get statistics about a non existent measure.");
     return -1;
   }
 
@@ -1719,7 +1781,7 @@ int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<u
   // We cycle over all starts
   for(size_t i = 0; i < this->_measures[measure_number]->count_starts(); i++) {
     if(!(current_start = this->_measures[measure_number]->get_start(i))) {
-      syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to stat a non existent start.");
+      rt_syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to stat a non existent start.");
       return -1;
     }
 
@@ -1757,17 +1819,17 @@ int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<u
 
     // Check if the measure number is valid.
     if(measure_number < 0 || measure_number >= this->measures()) {
-        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to get statistics about a non existent measure.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to get statistics about a non existent measure.");
         return -1;
     }
 
     Timings window_start, window_amplitude;
     if(window_start.set(win_start)) {
-        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: the time string passed is not valid (\"%s\").", win_start.c_str());
+        rt_syslog(ATMD_ERR, "VirtualBoard [stat_stops]: the time string passed is not valid (\"%s\").", win_start.c_str());
         return -1;
     }
     if(window_amplitude.set(win_ampl)) {
-        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: the time string passed is not valid (\"%s\").", win_ampl.c_str());
+        rt_syslog(ATMD_ERR, "VirtualBoard [stat_stops]: the time string passed is not valid (\"%s\").", win_ampl.c_str());
         return -1;
     }
 
@@ -1777,7 +1839,7 @@ int VirtualBoard::stat_stops(uint32_t measure_number, std::vector< std::vector<u
     // We cycle over all starts
     for(size_t i = 0; i < this->_measures[measure_number]->count_starts(); i++) {
       if(!(current_start = this->_measures[measure_number]->get_start(i))) {
-        syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to stat a non existent start.");
+        rt_syslog(ATMD_ERR, "VirtualBoard [stat_stops]: trying to stat a non existent start.");
         return -1;
       }
 

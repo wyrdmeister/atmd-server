@@ -439,8 +439,15 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
     // If board is booting we refuse to set parameters
     if(board.status() == ATMD_STATUS_BOOT) {
-      rt_syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting");
+      rt_syslog(ATMD_WARN, "Network [exec_command]: trying to set parameters with the system still booting.");
       this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BOOT, network_strerror[ATMD_NETERR_BOOT]));
+      return 0;
+    }
+
+    // If a measure is running refuse to set parameters
+    if(board.status() == ATMD_STATUS_RUNNING) {
+      rt_syslog(ATMD_ERR, "Network [exec_command]: parameters cannot be changed while a measure is running.");
+      this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_MEAS_RUN, network_strerror[ATMD_NETERR_MEAS_RUN]));
       return 0;
     }
 
@@ -476,7 +483,6 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
     // Catching window time setup command
     cmd_re = "ST ([0-9\\.]+[umsMh]{1})";
-
     if(cmd_re.FullMatch(parameters)) {
       cmd_re.FullMatch(parameters, &txt);
 #ifdef DEBUG
@@ -540,13 +546,6 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       if(enable_debug)
         rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting resolution (ref: %d, hs: %d).", val1, val2);
 #endif
-
-      // Check that no measures are running. Changing resolution during a measure will give bad data
-      if(board.status() == ATMD_STATUS_RUNNING) {
-        rt_syslog(ATMD_ERR, "Network [exec_command]: the resolution cannot be changed during a measurement.");
-        this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_MEAS_RUN, network_strerror[ATMD_NETERR_MEAS_RUN]));
-        return 0;
-      }
 
       // We check that the parameters are meaningful. We cannot change the resolution too much!
       if(val1 < 6 || val2 < 60) {
@@ -626,6 +625,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 #endif
 
       board.set_prefix(txt);
+      board.reset_counter();
       this->send_command("ACK");
       return 0;
     }
@@ -658,6 +658,35 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       return 0;
     }
 
+    // Set monitor
+    cmd_re = "MONITOR (\\d+) (\\d+) ([a-zA-Z0-9\\.\\_\\-\\/]+)";
+    if(cmd_re.FullMatch(parameters)) {
+      cmd_re.FullMatch(parameters, &val1, &val2, &txt);
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: setting monitor parameters to saving %d starts, every %d starts, to %s.", val1, val2, txt.c_str());
+#endif
+
+      board.set_monitor(val1, val2, txt);
+      this->send_command("ACK");
+      return 0;
+    }
+
+    // Reset monitor
+    if(parameters == "NOMONITOR") {
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested to disable monitor.");
+#endif
+
+      val1 = 0;
+      val2 = 0;
+      txt = "";
+      board.set_monitor(val1, val2, txt);
+      this->send_command("ACK");
+      return 0;
+    }
+
     this->send_command(this->format_command("ERR %d:%s", ATMD_NETERR_BAD_PARAM, network_strerror[ATMD_NETERR_BAD_PARAM]));
     return 0;
 
@@ -677,6 +706,16 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
         this->send_command(this->format_command("VAL AGENT %d %s", i, ether_ntoa(board.get_agent(i).agent_addr())));
       }
       return 0;
+    }
+
+    // Get the total number of channels
+    if(parameters == "CHS") {
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested number of available channels.");
+#endif
+
+      this->send_command(this->format_command("VAL CHS %d", 8*board.agents()));
     }
 
     // Get channel configuration
@@ -817,7 +856,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       return 0;
     }
 
-    // Get autorestart save format
+    // Get save format
     if(parameters == "FORMAT") {
 #ifdef DEBUG
       if(enable_debug)
@@ -828,14 +867,28 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
       return 0;
     }
 
-    // Get autorestart save format
+    // Get number of starts for autosave
     if(parameters == "AUTOSAVE") {
 #ifdef DEBUG
       if(enable_debug)
-        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured autosave save format.");
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured number of starts for autosave.");
 #endif
 
       this->send_command(this->format_command("VAL AUTOSAVE %d", board.get_autosave()));
+      return 0;
+    }
+
+    // Get monitor  save format
+    if(parameters == "MONITOR") {
+#ifdef DEBUG
+      if(enable_debug)
+        rt_syslog(ATMD_DEBUG, "Network [exec_command]: client requested configured monitor parameters.");
+#endif
+
+      // Get monitor parameters
+      board.get_monitor(val1, val2, txt);
+
+      this->send_command(this->format_command("VAL MONITOR %d %d %s", val1, val2, txt.c_str()));
       return 0;
     }
 

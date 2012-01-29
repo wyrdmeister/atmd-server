@@ -138,16 +138,14 @@ int StartData::get_rawstoptime(uint32_t num, uint32_t& retrig, double& stop)cons
 }
 
 
-/* @fn Measure::add_start(const StartData& start)
- * Get a vector of starts from the agents, merges them into a single start object
- * and adds it to the Measure object.
+/* @fn StartData::merge(const std::vector<StartData*>& st)
  *
- * @param start A constant reference to a StartData object.
- * @return Return 0 on success, -1 on error.
  */
-int Measure::add_start(std::vector<StartData*>& svec) {
-  // Create new StartData object
+StartData* StartData::merge(const std::vector<StartData*>& svec) {
   StartData * merged = new StartData;
+
+  if(!merged)
+    return NULL;
 
   // Sum up all events
   size_t numev = 0;
@@ -173,13 +171,21 @@ int Measure::add_start(std::vector<StartData*>& svec) {
     else
       syslog(ATMD_ERR, "Measure [add_start]: StartData was missing the window start and duration.");
   }
+  return merged;
+}
 
-  // Add tbin
-  merged->set_tbin(svec[0]->get_tbin());
 
+/* @fn Measure::add_start(const StartData& start)
+ * Get a vector of starts from the agents, merges them into a single start object
+ * and adds it to the Measure object.
+ *
+ * @param start A constant reference to a StartData object.
+ * @return Return 0 on success, -1 on error.
+ */
+int Measure::add_start(std::vector<StartData*>& svec) {
   // Add start to measure
   try {
-    this->starts.push_back(merged);
+    this->starts.push_back(StartData::merge(svec));
     return 0;
 
   } catch (std::exception& e) {

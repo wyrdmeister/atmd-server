@@ -31,6 +31,9 @@
 // Local
 #include "common.h"
 
+// Declare class VirtualBoard for friendship
+class VirtualBoard;
+
 
 /* @class StartData
  * This class hold the data of on start event
@@ -69,6 +72,9 @@ public:
   // Preallocate
   void reserve(size_t sz);
 
+  // Merge multiple StartData struct into one
+  static StartData* merge(const std::vector<StartData*>& svec);
+
 private:
   std::vector<uint64_t> window_time;    // Effective window time in nanoseconds
   std::vector<uint64_t> window_begin;   // Total time from the begin of the measure in nanoseconds
@@ -92,6 +98,9 @@ public:
       delete starts[i];
     this->starts.clear();
   }; // The destructor should cycle over starts vector to free all the start objects
+
+  // Make class VirtualBoard a friend
+  friend class VirtualBoard;
 
   // Interface to add a start object
   int add_start(std::vector<StartData*>& starts);
