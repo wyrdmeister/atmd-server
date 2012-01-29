@@ -111,6 +111,9 @@ void atmd_measure(void *arg) {
     if(terminate_interrupt)
       break;
 
+    // Reset stop flag
+    sys->board->stop(false);
+
     // Put thread to sleep, waiting for a start command
     ctrl_size = sizeof(meas_info);
     retval = ctrl_if.recv(opcode, &meas_info, ctrl_size, 10000000);
