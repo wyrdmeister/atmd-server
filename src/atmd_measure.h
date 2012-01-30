@@ -108,7 +108,7 @@ public:
   // Interface to clear all stored start objects
   void clear() {
     for(uint32_t i = 0; i < this->starts.size(); i++)
-      delete (starts[i]);
+      delete starts[i];
     this->starts.clear();
     this->measure_begin.clear();
     this->measure_time.clear();

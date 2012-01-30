@@ -1104,8 +1104,12 @@ void VirtualBoard::data_task(void *arg) {
 
       // Add current start to curr_measure
       curr_measure->add_start(curr_start);
-      for(size_t i = 0; i < curr_start.size(); i++)
+
+      // Clean up curr start
+      for(size_t i = 0; i < curr_start.size(); i++) {
+        delete curr_start[i];
         curr_start[i] = NULL;
+      }
 
       // Reset flags
       for(size_t i = 0; i < agent_done.size(); i++)
