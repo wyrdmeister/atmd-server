@@ -247,6 +247,8 @@ public:
 
   // Clear all measures
   void clear_measures() {
+    for(size_t i = 0; i < _measures.size(); i++)
+      delete _measures[i];
     _measures.clear();
   };
 
