@@ -834,7 +834,8 @@ void VirtualBoard::data_task(void *arg) {
         if(enable_debug)
           rt_syslog(ATMD_DEBUG, "VirtualBoard [data_task]: received a termination packet. Total measure time was: %.3f s.", packet.window_time()/1e9);
 #endif
-        curr_measure->add_time(packet.window_start(), packet.window_time());
+        if(!pthis->get_autosave())
+          curr_measure->add_time(packet.window_start(), packet.window_time());
       } else {
         rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: received a termination packet, but current measure pointer in NULL.");
       }
