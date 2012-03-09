@@ -34,6 +34,10 @@ EN_CAP="no"
 PREFIX="/usr/local/rtnet"
 
 
+TDMACFG="${PREFIX}/sbin/tdmacfg"
+RTIFCONFIG="${PREFIX}/sbin/rtifconfig"
+RTROUTE="${PREFIX}/sbin/rtroute"
+
 # Initialize RTNET loading kernel modules
 init_rtnet() {
   # Remove non-RT module if present
