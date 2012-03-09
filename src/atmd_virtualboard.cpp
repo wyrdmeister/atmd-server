@@ -346,7 +346,7 @@ void VirtualBoard::control_task(void *arg) {
   pthis->clear_config();
 
   // Resume data threads
-  retval = pthis->unlock_threads()
+  retval = pthis->unlock_threads();
   if(retval) {
     switch(retval) {
       case -EINVAL:
