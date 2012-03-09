@@ -234,7 +234,7 @@ bool VirtualBoard::wait_for_datatask() {
     return true;
   } else {
     // Task exist, check its status
-    if(task_info.status != T_LOCK)
+    if((task_info.status & T_SUSP) == 0)
       return true;
   }
 
@@ -245,7 +245,7 @@ bool VirtualBoard::wait_for_datatask() {
     return true;
   } else {
     // Task exist, check its status
-    if(task_info.status != T_LOCK)
+    if((task_info.status & T_SUSP) == 0)
       return true;
   }
   return false;
@@ -398,7 +398,7 @@ void VirtualBoard::control_task(void *arg) {
         break;
 
       default:
-        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads. Unexpected error.");
+        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads. Unexpected error (%d).", retval);
         break;
     }
     // Terminate server
