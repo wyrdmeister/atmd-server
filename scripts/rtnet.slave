@@ -1,6 +1,6 @@
 #!/bin/bash
 # RTNET custom startup script
-# Configuration for Master
+# Configuration for Slave
 
 #
 # Ethernet card driver
@@ -10,18 +10,18 @@ NETDRV="e1000"
 #
 # IP configuration
 #
-IP="10.0.0.1"
+IP="10.0.0.100"
 NETMASK="255.255.255.0"
-SLAVE_IP=("10.0.0.100" "10.0.0.200")
-SLAVE_MAC=("00:1B:21:D3:07:5F" "00:1B:21:D3:08:4F")
-#SLAVE_IP=("10.0.0.100")
-#SLAVE_MAC=("00:1B:21:D3:07:5F")
+MASTER_IP="10.0.0.1"
+MASTER_MAC="00:1B:21:D3:08:35"
 
 #
 # Cycles and slots
 #
-MASTER_CYCLE=5000
-MASTER_SLOTS=("0" "2500");
+SLOT_START=100
+SLOT_END=2400
+SLOT_OFFSET=100
+NUM_SLOTS=$(( ($SLOT_END - $SLOT_START) / ($SLOT_OFFSET) ))
 
 #
 # Enable capture
@@ -33,10 +33,6 @@ EN_CAP="no"
 #
 PREFIX="/usr/local/rtnet"
 
-
-TDMACFG="${PREFIX}/sbin/tdmacfg"
-RTIFCONFIG="${PREFIX}/sbin/rtifconfig"
-RTROUTE="${PREFIX}/sbin/rtroute"
 
 # Initialize RTNET loading kernel modules
 init_rtnet() {
@@ -74,23 +70,22 @@ case "$1" in
   start)
     init_rtnet
     echo " = Adding routes..."
-    for i in  $(seq 0 $((${#SLAVE_IP[@]} - 1)))
+    $RTROUTE add $MASTER_IP $MASTER_MAC dev rteth0
+    echo " = Configuring TDMA slave..."
+    $TDMACFG rteth0 slave -c 100 -i 63
+    echo " = Configuring ${NUM_SLOTS} slots..."
+    sleep 5
+    for i in $(seq 0 $NUM_SLOTS)
     do
-      $RTROUTE add ${SLAVE_IP[$i]} ${SLAVE_MAC[$i]} dev rteth0
-    done
-    echo " = Configure TDMA as master..."
-    $TDMACFG rteth0 master $MASTER_CYCLE -i 32
-    echo " = Configure TDMA slots..."
-    for i in  $(seq 0 $((${#MASTER_SLOTS[@]} - 1)))
-    do
-      echo " * Adding slot $i at ${MASTER_SLOTS[$i]} ..."
-      if [ "$i" = "0" ]; then
-        $TDMACFG rteth0 slot $i ${MASTER_SLOTS[$i]} -p 1/1 -s 1500 -t 1000000000
+      OFFSET=$(( $SLOT_START + ($SLOT_OFFSET * $i) ))
+      echo " * Adding slot $i at offset $OFFSET..."
+      if [ $i = "0" ]; then
+        $TDMACFG rteth0 slot $i $OFFSET -p 1/1 -s 1500 -t 1000000000
       else
-        $TDMACFG rteth0 slot $i ${MASTER_SLOTS[$i]} -p 1/1 -j 0 -s 1500 -t 1000000000
+        $TDMACFG rteth0 slot $i $OFFSET -p 1/1 -s 1500 -j 0 -t 1000000000
       fi
     done
-    echo " = Configuration done."
+    echo " = Configuration done.."
     ;;
 
   stop)
