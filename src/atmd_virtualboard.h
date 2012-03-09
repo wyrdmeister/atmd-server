@@ -122,10 +122,12 @@ public:
 
   // Unlock data threads
   int unlock_threads() {
-    if(rt_task_resume(&_rt_data_task))
-      return -1;
-    if(rt_task_resume(&_data_task))
-      return -1;
+    int retval = rt_task_resume(&_rt_data_task);
+    if(retval)
+      return retval;
+    retval = rt_task_resume(&_data_task);
+    if(retval)
+      return retval;
     return 0;
   };
 

@@ -346,8 +346,21 @@ void VirtualBoard::control_task(void *arg) {
   pthis->clear_config();
 
   // Resume data threads
-  if(pthis->unlock_threads()) {
-    rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads.");
+  retval = pthis->unlock_threads()
+  if(retval) {
+    switch(retval) {
+      case -EINVAL:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads. Invalid descriptor.");
+        break;
+
+      case -EIDRM:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads. Deleted descriptor.");
+        break;
+
+      default:
+        rt_syslog(ATMD_CRIT, "VirtualBoard [control_task]: failed to unlock data threads. Unexpected error.");
+        break;
+    }
     // Terminate server
     terminate_interrupt = true;
     return;
