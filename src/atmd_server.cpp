@@ -232,7 +232,6 @@ int main(int argc, char * const argv[])
   if(!pid_file.is_open()) {
     if(pid_filename == ATMD_PID_FILE) {
       syslog(ATMD_CRIT, "Could not open pid file %s. Exiting.", pid_filename.c_str());
-      curl_global_cleanup();
       return -1;
     } else {
       syslog(ATMD_ERR, "Could not open user supplied pid file %s. Trying default.", pid_filename.c_str());
@@ -240,7 +239,6 @@ int main(int argc, char * const argv[])
       pid_file.open(pid_filename.c_str());
       if(!pid_file.is_open()) {
         syslog(ATMD_CRIT, "Could not open pid file %s. Exiting.", pid_filename.c_str());
-        curl_global_cleanup();
         return -1;
       }
     }
@@ -251,7 +249,6 @@ int main(int argc, char * const argv[])
   AtmdConfig server_conf;
   if(server_conf.read(conf_filename)) {
     syslog(ATMD_CRIT, "Cannot open configuration file '%s'. Exiting.", conf_filename.c_str());
-    curl_global_cleanup();
     return -1;
   }
 
@@ -261,7 +258,6 @@ int main(int argc, char * const argv[])
   if(child_pid == -1) {
     // Fork failed.
     syslog(ATMD_CRIT, "Terminating atmd-server version %s because fork failed with error \"%m\".", VERSION);
-    curl_global_cleanup();
     return -1;
 
   } else if(child_pid != 0) {

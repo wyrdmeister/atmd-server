@@ -120,6 +120,9 @@ public:
   // Non-RT data thread code
   static void data_task(void *arg);
 
+  // Wait for data tasks
+  bool wait_for_datatask();
+
   // Unlock data threads
   int unlock_threads() {
     int retval = rt_task_resume(&_rt_data_task);

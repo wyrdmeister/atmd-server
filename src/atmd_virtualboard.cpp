@@ -157,7 +157,7 @@ int VirtualBoard::init() {
     return -1;
   }
 
-  // Finally we can start the non-RT data data thread
+  // Finally we can start the non-RT data thread
   retval = rt_task_spawn(&_data_task, ATMD_NRT_DATA_TASK, 0, 0, T_FPU|T_JOINABLE, VirtualBoard::data_task, (void*)this);
   if(retval) {
     switch(retval) {
@@ -217,6 +217,38 @@ int VirtualBoard::send_command(int& opcode, GenMsg& packet) {
     return -1;
   }
   return 0;
+}
+
+
+/* @fn bool VirtualBoard::wait_for_datatask()
+ * Check that data tasks have reached the lock status.
+ */
+bool VirtualBoard::wait_for_datatask() {
+  RT_TASK_INFO task_info;
+  int retval = 0;
+
+  // Check for RT data task
+  retval = rt_task_inquire(&_rt_data_task, &task_info);
+  if(retval) {
+    // Task does not exist yet
+    return true;
+  } else {
+    // Task exist, check its status
+    if(task_info.status != T_LOCK)
+      return true;
+  }
+
+  // Check for non-RT data task
+  retval = rt_task_inquire(&_data_task, &task_info);
+  if(retval) {
+    // Task does not exist yet
+    return true;
+  } else {
+    // Task exist, check its status
+    if(task_info.status != T_LOCK)
+      return true;
+  }
+  return false;
 }
 
 
@@ -344,6 +376,14 @@ void VirtualBoard::control_task(void *arg) {
 
   // Issue clear_config() command
   pthis->clear_config();
+
+  // Wait for data thread to start
+  // (needed on single processor machines to avoid race conditions between starting tasks)
+  while(pthis->wait_for_datatask()) {
+    if(terminate_interrupt)
+      return;
+    rt_task_sleep(10000000); // Sleep for 1ms
+  }
 
   // Resume data threads
   retval = pthis->unlock_threads();
