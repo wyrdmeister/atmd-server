@@ -40,7 +40,7 @@ class VirtualBoard;
  */
 class StartData {
 public:
-  StartData(): time_bin(0.0), id(0) {};
+  StartData(): time_bin(0.0), _id(0) {};
   ~StartData() {};
 
   int add_event(uint32_t retrig, int32_t stop, int8_t ch);
@@ -89,7 +89,7 @@ private:
 
   double time_bin;                      // Time bin in ps
 
-  uint32_t _id;                          // Start ID (actually used only when using TANGO)
+  uint32_t _id;                         // Start ID (actually used only when using TANGO)
 };
 
 

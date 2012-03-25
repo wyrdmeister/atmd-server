@@ -40,7 +40,12 @@
 
 // TANGO
 #ifdef EN_TANGO
+#define TANGO_CLIENT 1
+namespace Tango {
+	class Attribute;
+}
 #include <tango.h>
+#include <classattribute.h>
 #endif
 
 // Local
@@ -406,19 +411,19 @@ private:
   // == TANGO stuff ==
 #ifdef EN_TANGO
 private:
-  Tango::DeviceProxy *dev;
+  Tango::DeviceProxy *tangodev;
 public:
-  long get_bunchnumber()const {
-    if(dev) {
+  uint32_t get_bunchnumber()const {
+    if(tangodev) {
       try {
-        Tango::DeviceAttribute attr = dev->read_attribute("BunchNumber");
+        Tango::DeviceAttribute attr = this->tangodev->read_attribute("BunchNumber");
         Tango::DevLong bnum;
         attr >> bnum;
         return bnum;
       } catch(Tango::DevFailed e) {
         Tango::DevErrorList err = e.errors;
-        for(int i=0; i < err.length(); i++) {
-          rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin, err[i].reason, err[i].desc);
+        for(size_t i=0; i < err.length(); i++) {
+          rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin.in(), err[i].reason.in(), err[i].desc.in());
         }
       }
     } else {

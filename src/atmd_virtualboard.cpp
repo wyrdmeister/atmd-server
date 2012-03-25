@@ -187,8 +187,8 @@ int VirtualBoard::init() {
     this->tangodev = new Tango::DeviceProxy("srv-ldm-srf:20000/ldm/daq/rnmexport");
   } catch(Tango::DevFailed e) {
     Tango::DevErrorList err = e.errors;
-    for(int i=0; i < err.length(); i++) {
-      rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin, err[i].reason, err[i].desc);
+    for(size_t i=0; i < err.length(); i++) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin.in(), err[i].reason.in(), err[i].desc.in());
     }
   }
 #endif
@@ -1182,8 +1182,8 @@ void VirtualBoard::data_task(void *arg) {
 
 #ifdef EN_TANGO
       // Replace start ID with the bunch number
-      for(size_t i = 0; < curr_start.size(); i++)
-        curr_start.id(bnumber);
+      for(size_t i = 0; i < curr_start.size(); i++)
+        curr_start[i]->id(bnumber);
 #endif
 
       // Add current start to curr_measure

@@ -1,3 +1,4 @@
+
 /*
  * ATMD Server version 3.0
  *
@@ -91,7 +92,7 @@ private:
 
 #ifdef EN_TANGO
   // TANGO trigger channel
-  int8_t _tango_ch;
+  unsigned int _tango_ch;
 #endif
 
 };
