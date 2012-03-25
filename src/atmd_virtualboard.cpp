@@ -1565,7 +1565,7 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
         }
 
 #ifdef EN_TANGO
-          uint32_t startid = curr_start->id();
+          uint32_t startid = current_start->id();
           if(startid == 0)
             startid = i+1;
 #else
