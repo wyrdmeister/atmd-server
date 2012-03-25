@@ -74,7 +74,7 @@ CPPFLAGS="$CPPFLAGS -I${RTNET_DIR}/include"
 dnl If TANGO is enabled
 if test yes = "$en_tango"; then
   if test yes = "$en_server"; then
-    PKG_CHECK_MODULES([TANGO], [libtango7 >= 7])
+    PKG_CHECK_MODULES([TANGO], [tango >= 7])
   fi
   CPPFLAGS="$CPPFLAGS -DEN_TANGO"
 fi
