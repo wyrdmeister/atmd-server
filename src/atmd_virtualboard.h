@@ -425,6 +425,7 @@ public:
         for(size_t i=0; i < err.length(); i++) {
           rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin.in(), err[i].reason.in(), err[i].desc.in());
         }
+        return 0;
       }
     } else {
       return 0;
