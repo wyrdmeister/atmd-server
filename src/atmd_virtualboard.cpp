@@ -918,6 +918,7 @@ void VirtualBoard::data_task(void *arg) {
 #ifdef DEBUG
     if(enable_debug)
       rt_syslog(ATMD_DEBUG, "VirtualBoard [data_task]: read bunch number %d.", bnumber);
+#endif
   }
 #endif
 
