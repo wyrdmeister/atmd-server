@@ -915,6 +915,9 @@ void VirtualBoard::data_task(void *arg) {
 #ifdef EN_TANGO
   if(packet.type() == ATMD_DT_TANGO) {
     bnumber = pthis->get_bunchnumber();
+#ifdef DEBUG
+    if(enable_debug)
+      rt_syslog(ATMD_DEBUG, "VirtualBoard [data_task]: read bunch number %d.", bnumber);
   }
 #endif
 
@@ -1559,17 +1562,26 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
           rt_syslog(ATMD_ERR, "VirtualBoard [measure2file]: trying to save a non existent start.");
           return -1;
         }
+
+#ifdef EN_TANGO
+          uint32_t startid = curr_start->id();
+          if(startid == 0)
+            startid = i+1;
+#else
+          uint32_t startid = i+1;
+#endif
+
         // Save data
         for(size_t j = 0; j < current_start->count_stops(); j++) {
           current_start->get_channel(j, channel);
           current_start->get_stoptime(j, stoptime);
 
           if(_format == ATMD_FORMAT_MATPS1) {
-            data(ev_ind, 0) = double(i+1);
+            data(ev_ind, 0) = double(startid);
             data(ev_ind, 1) = double(channel);
             data(ev_ind, 2) = stoptime;
           } else {
-            data_st(ev_ind,0) = i+1;
+            data_st(ev_ind,0) = startid;
             data_ch(ev_ind,0) = channel;
             data_stop(ev_ind,0) = stoptime;
           }
