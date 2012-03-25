@@ -38,6 +38,11 @@
 #include <native/task.h>
 #include <native/mutex.h>
 
+// TANGO
+#ifdef EN_TANGO
+#include <tango.h>
+#endif
+
 // Local
 #include "atmd_config.h"
 #include "atmd_rtnet.h"
@@ -396,6 +401,33 @@ private:
 
   // Board status
   int _status;
+
+
+  // == TANGO stuff ==
+#ifdef EN_TANGO
+private:
+  Tango::DeviceProxy *dev;
+public:
+  long get_bunchnumber()const {
+    if(dev) {
+      try {
+        Tango::DeviceAttribute attr = dev->read_attribute("BunchNumber");
+        Tango::DevLong bnum;
+        attr >> bnum;
+        return bnum;
+      } catch(Tango::DevFailed e) {
+        Tango::DevErrorList err = e.errors;
+        for(int i=0; i < err.length(); i++) {
+          rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin, err[i].reason, err[i].desc);
+        }
+      }
+    } else {
+      return 0;
+    }
+  }
+private:
+#endif
+
 };
 
 #endif

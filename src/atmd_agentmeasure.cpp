@@ -195,7 +195,11 @@ void atmd_measure(void *arg) {
 
       // Call measure function
       // NOTE: Defined start wait timeout as the time that remains for the measure.
+#ifdef EN_TANGO
+      retval = atmd_get_start(sys->board, meas_info.window_time(), meas_info.measure_time() - (measure_end-measure_start), events, sys->sock, sys->addr, sys->tango_ch);
+#else
       retval = atmd_get_start(sys->board, meas_info.window_time(), meas_info.measure_time() - (measure_end-measure_start), events);
+#endif
       if(retval) {
         rt_syslog(ATMD_ERR, "Measure [atmd_measure]: failed to get start. Terminating measure.");
         measure_end = rt_timer_read();
@@ -270,7 +274,11 @@ void atmd_measure(void *arg) {
  * @param event Reference to the event strucuture that will hold the data
  * @return Return 0 on success or a negative value on error
  */
+#ifdef EN_TANGO
+int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& events, RTnet* sock, const struct ether_addr* addr, int8_t tango_ch) {
+#else
 int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& events) {
+#endif
 
   // We init the window finish flag
   bool finish_window = false;
@@ -393,6 +401,19 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
         if(((dra_data & 0x00020000) >> 17) == 0)
           ch = -ch;
 
+#ifdef EN_TANGO
+        if(ch == tango_ch) {
+          // Send notification packet to master
+          DataMsg packet;
+          packet.type(ATMD_DT_TANGO);
+          packet.encode();
+          if(sock->send(packet, addr)) {
+            rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message over RTnet.");
+            return -1;
+          }
+        }
+#endif
+
         // If main_retrig0 flag is set we should find out if the main_startcounter0 should be updated
         if(main_retrig0) {
           if(prev_start_count0 == -1) {
@@ -466,6 +487,19 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
           int8_t ch = (int8_t)( ((dra_data & 0x0C000000) >> 26) + 5);
           if(((dra_data & 0x00020000) >> 17) == 0)
               ch = -ch;
+
+#ifdef EN_TANGO
+        if(ch == tango_ch) {
+          // Send notification packet to master
+          DataMsg packet;
+          packet.type(ATMD_DT_TANGO);
+          packet.encode();
+          if(sock->send(packet, addr)) {
+            rt_syslog(ATMD_ERR, "Measure [atmd_send_start]: failed to send message over RTnet.");
+            return -1;
+          }
+        }
+#endif
 
           if(main_retrig1) {
             if(prev_start_count1 == -1) {

@@ -40,6 +40,9 @@
 #define ATMD_DT_DATA       10   // General data packet
 #define ATMD_DT_LAST       11   // Final data packet
 #define ATMD_DT_TERM       12   // Measure termination packet
+#ifdef EN_TANGO
+#define ATMD_DT_TANGO      13   // TANGO notification
+#endif
 
 // Actions
 #define ATMD_ACTION_NOACTION 0

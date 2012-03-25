@@ -175,6 +175,9 @@ StartData* StartData::merge(const std::vector<StartData*>& svec) {
   // Add tbin
   merged->set_tbin(svec[0]->get_tbin());
 
+  // Add ID
+  merged->id(svec[0]->id());
+
   return merged;
 }
 

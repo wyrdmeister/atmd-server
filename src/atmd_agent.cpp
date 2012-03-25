@@ -452,6 +452,9 @@ int main(int argc, char * const argv[]) {
   th_info.board = &board;
   th_info.sock = &data_sock;
   th_info.addr = &master_addr;
+#ifdef EN_TANGO
+  th_info.tango_ch = server_conf.tango_ch();
+#endif
 
   // RT measurement thread
   RT_TASK meas_th;

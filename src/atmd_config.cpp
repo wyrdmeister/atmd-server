@@ -140,6 +140,17 @@ int AtmdConfig::read(const std::string& filename) {
           continue;
       }
 
+#ifdef EN_TANGO
+      conf_re = "^tango (\\d+)";
+      if(conf_re.PartialMatch(line, &_tango_ch)) {
+#ifdef DEBUG
+        if(enable_debug)
+          syslog(ATMD_DEBUG, "Config [read]: configured TANGO trigger channel as %u.", _tango_ch);
+#endif
+        continue;
+      }
+#endif
+
     } else {
       continue;
     }

@@ -26,8 +26,8 @@ atmd_agent_SOURCES = \
 	atmd_rtnet.cpp \
 	atmd_rtcomm.cpp
 
-atmd_server_LDADD = $(XENO_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(XENO_LIBS)
-atmd_server_CPPFLAGS = $(CPPFLAGS) $(LIBCURL_CPPFLAGS) -DATMD_SERVER
+atmd_server_LDADD = $(XENO_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(XENO_LIBS) $(TANGO_LIBS)
+atmd_server_CPPFLAGS = $(CPPFLAGS) $(LIBCURL_CPPFLAGS) $(TANGO_CFLAGS) -DATMD_SERVER
 
 atmd_agent_LDADD = $(XENO_LIBS) $(PCRECPP_LIBS) $(PCI_LIBS) $(XENO_LIBS)
 atmd_agent_CPPFLAGS = $(CPPFLAGS) -DATMD_AGENT

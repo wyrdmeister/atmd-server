@@ -40,7 +40,7 @@ class VirtualBoard;
  */
 class StartData {
 public:
-  StartData(): time_bin(0.0) {};
+  StartData(): time_bin(0.0), id(0) {};
   ~StartData() {};
 
   int add_event(uint32_t retrig, int32_t stop, int8_t ch);
@@ -75,6 +75,10 @@ public:
   // Merge multiple StartData struct into one
   static StartData* merge(const std::vector<StartData*>& svec);
 
+  // ID
+  uint32_t id()const { return _id; };
+  void id(uint32_t val) { _id = val; };
+
 private:
   std::vector<uint64_t> window_time;    // Effective window time in nanoseconds
   std::vector<uint64_t> window_begin;   // Total time from the begin of the measure in nanoseconds
@@ -84,6 +88,8 @@ private:
   std::vector<int8_t> channel;          // Vector of channel numbers
 
   double time_bin;                      // Time bin in ps
+
+  uint32_t _id;                          // Start ID (actually used only when using TANGO)
 };
 
 

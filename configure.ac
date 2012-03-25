@@ -12,6 +12,9 @@ AC_PROG_CXX
 AM_PROG_CC_STDC
 AC_HEADER_STDC
 
+dnl Enable tango
+AC_ARG_ENABLE(tango, [  --enable-tango  Enable TANGO support], [en_tango=yes], [])
+
 dnl Enable debug
 AC_ARG_ENABLE(debug, [  --enable-debug  Enable debug code], [en_debug=yes], [])
 
@@ -67,6 +70,14 @@ if test \! -d "${RTNET_DIR}/include"; then
     AC_MSG_ERROR([*** RTnet install directory not found! ***])
 fi
 CPPFLAGS="$CPPFLAGS -I${RTNET_DIR}/include"
+
+dnl If TANGO is enabled
+if test yes = "$en_tango"; then
+  if test yes = "$en_server"; then
+    PKG_CHECK_MODULES([TANGO], [libtango7 >= 7])
+  fi
+  CPPFLAGS="$CPPFLAGS -DEN_TANGO"
+fi
 
 dnl If we build server...
 if test yes = "$en_server"; then

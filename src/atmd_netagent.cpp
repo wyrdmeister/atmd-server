@@ -380,7 +380,6 @@ int DataMsg::encode(size_t start, const xenovec<int8_t>& ch,
  *
  */
 int DataMsg::encode() {
-  // This function only support ATMD_DT_TERM type
   if(_type == ATMD_DT_TERM) {
 
     // Clear buffer
@@ -437,6 +436,25 @@ int DataMsg::encode() {
     _size = offset;
     return 0;
 
+#ifdef EN_TANGO
+  } else if(_type == ATMD_DT_TANGO) {
+
+    // Clear buffer
+    memset(_buffer, 0, ATMD_PACKET_SIZE);
+
+    size_t offset = 0;
+
+    // Set type
+    offset = serialize<uint16_t>(_buffer, offset, _type);
+
+    // Skip numev and start_id
+    offset += sizeof(uint16_t) + sizeof(uint32_t);
+
+    // Set size
+    _size = offset;
+    return 0;
+#endif
+
   } else {
     return -1;
   }
@@ -484,6 +502,11 @@ int DataMsg::decode() {
       // Measure duration
       offset = deserialize<uint64_t>(_buffer, offset, _window_time);
       break;
+
+#ifdef EN_TANGO
+    case ATMD_DT_TANGO:
+      break;
+#endif
 
     default:
       rt_syslog(ATMD_ERR, "NetAgent [DataMsg::decode]: trying to decode an unknown message type.");

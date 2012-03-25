@@ -63,6 +63,10 @@ public:
   // Master address
   struct ether_addr* addr;
 
+#ifdef EN_TANGO
+  // Tango channel
+  int8_t tango_ch;
+#endif
 };
 
 

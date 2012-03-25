@@ -180,6 +180,19 @@ int VirtualBoard::init() {
     return -1;
   }
 
+#ifdef EN_TANGO
+  // Connecto to TANGO device
+  this->tangodev = NULL;
+  try {
+    this->tangodev = new Tango::DeviceProxy("srv-ldm-srf:20000/ldm/daq/rnmexport");
+  } catch(Tango::DevFailed e) {
+    Tango::DevErrorList err = e.errors;
+    for(int i=0; i < err.length(); i++) {
+      rt_syslog(ATMD_CRIT, "VirtualBoard [init]: TANGO error. Layer: %d, source: %s, error: %s, desc: %s", i+1, err[i].origin, err[i].reason, err[i].desc);
+    }
+  }
+#endif
+
   return 0;
 }
 
@@ -829,6 +842,11 @@ void VirtualBoard::data_task(void *arg) {
   // Buffer
   char msg[sizeof(size_t)+ATMD_PACKET_SIZE];
 
+#ifdef EN_TANGO
+  // Bunch number
+  uint32_t bnumber = 0;
+#endif
+
   // Cycle of the queue
   while(true) {
 
@@ -893,6 +911,12 @@ void VirtualBoard::data_task(void *arg) {
         rt_syslog(ATMD_ERR, "VirtualBoard [data_task]: received a termination packet, but current measure pointer in NULL.");
       }
     }
+
+#ifdef EN_TANGO
+  if(packet.type() == ATMD_DT_TANGO) {
+    bnumber = pthis->get_bunchnumber();
+  }
+#endif
 
     // Check if we are done
     bool measure_end = true;
@@ -1155,6 +1179,12 @@ void VirtualBoard::data_task(void *arg) {
         // Try to save
         pthis->save_monitor(mon);
       }
+
+#ifdef EN_TANGO
+      // Replace start ID with the bunch number
+      for(size_t i = 0; < curr_start.size(); i++)
+        curr_start.id(bnumber);
+#endif
 
       // Add current start to curr_measure
       curr_measure->add_start(curr_start);

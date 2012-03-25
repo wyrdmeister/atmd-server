@@ -42,7 +42,7 @@
  */
 class AtmdConfig {
 public:
-  AtmdConfig() : _rtskbs(0) {
+  AtmdConfig() : _rtskbs(0), _tango_ch(0) {
     memset(_rtif, 0, IFNAMSIZ);
     memset(_tdma_dev, 0, IFNAMSIZ);
   };
@@ -66,6 +66,11 @@ public:
   // Return the TDMA device name
   const char * tdma_dev()const { return _tdma_dev; };
 
+#ifdef EN_TANGO
+  // Return TANGO trigger channel
+  int8_t tango_ch()const { return _tango_ch; };
+#endif
+
   // Clear config
   void clear() {
     agent_addr.clear();
@@ -83,6 +88,11 @@ private:
 
   // TDMA device
   char _tdma_dev[IFNAMSIZ];
+
+#ifdef EN_TANGO
+  // TANGO trigger channel
+  int8_t _tango_ch;
+#endif
 
 };
 
