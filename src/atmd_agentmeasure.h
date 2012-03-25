@@ -175,7 +175,11 @@ private:
 
 // Function prototypes
 void atmd_measure(void *arg);
+#ifdef EN_TANGO
+int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& events, RTnet* sock, const struct ether_addr* addr, int8_t tango_ch);
+#else
 int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& events);
+#endif
 int atmd_send_start(uint32_t id, EventData& events, RTnet* sock, const struct ether_addr* addr);
 
 #endif
