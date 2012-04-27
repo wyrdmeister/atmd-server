@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Project SYSTEM "Project-5.1.dtd">
+<!-- eric5 project file for project rtnet-control -->
+<!-- Saved: 2012-04-27, 14:21:43 -->
+<!-- Copyright (C) 2012 Michele Devetta, michele.devetta@unimi.it -->
+<Project version="5.1">
+  <Language></Language>
+  <Hash>f2a3ddf6d2b8c8ba8e9788eb861c67749ba17ea3</Hash>
+  <ProgLanguage mixed="0">Python2</ProgLanguage>
+  <ProjectType>Qt4</ProjectType>
+  <Description>GUI to control and monitor RTnet and ATMD-GPX server</Description>
+  <Version>0.1</Version>
+  <Author>Michele Devetta</Author>
+  <Email>michele.devetta@unimi.it</Email>
+  <Sources>
+    <Source>rtnet-control.py</Source>
+    <Source>__init__.py</Source>
+    <Source>ui/Ui_MainWindow.py</Source>
+    <Source>ui/MainWindow.py</Source>
+  </Sources>
+  <Forms>
+    <Form>ui/MainWindow.ui</Form>
+  </Forms>
+  <Translations/>
+  <Resources/>
+  <Interfaces/>
+  <Others/>
+  <MainScript>rtnet-control.py</MainScript>
+  <Vcs>
+    <VcsType>None</VcsType>
+  </Vcs>
+  <FiletypeAssociations>
+    <FiletypeAssociation pattern="*.idl" type="INTERFACES"/>
+    <FiletypeAssociation pattern="*.ptl" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.py" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.pyw2" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.qm" type="TRANSLATIONS"/>
+    <FiletypeAssociation pattern="*.qrc" type="RESOURCES"/>
+    <FiletypeAssociation pattern="*.ts" type="TRANSLATIONS"/>
+    <FiletypeAssociation pattern="*.ui" type="FORMS"/>
+    <FiletypeAssociation pattern="*.ui.h" type="FORMS"/>
+  </FiletypeAssociations>
+</Project>

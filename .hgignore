@@ -1,0 +1,6 @@
+syntax: glob
+*.o
+src/.deps
+autom4te.cache
+*~
+

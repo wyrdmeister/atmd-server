@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE Project SYSTEM "Project-5.1.dtd">
+<!-- eric5 project file for project atmd_gui -->
+<!-- Saved: 2012-04-25, 10:30:16 -->
+<!-- Copyright (C) 2012 Michele Devetta, michele.devetta@unimi.it -->
+<Project version="5.1">
+  <Language>en</Language>
+  <Hash>cf432a300f448af420d784962412f0234063ecce</Hash>
+  <ProgLanguage mixed="0">Python2</ProgLanguage>
+  <ProjectType>Qt4</ProjectType>
+  <Description></Description>
+  <Version>0.1</Version>
+  <Author>Michele Devetta</Author>
+  <Email>michele.devetta@unimi.it</Email>
+  <Sources>
+    <Source>__init__.py</Source>
+    <Source>atmd-gui.py</Source>
+    <Source>ui/__init__.py</Source>
+    <Source>ui/Ui_mainwindow.py</Source>
+    <Source>ui/mainwindow.py</Source>
+  </Sources>
+  <Forms>
+    <Form>ui/mainwindow.ui</Form>
+  </Forms>
+  <Translations/>
+  <Resources/>
+  <Interfaces/>
+  <Others/>
+  <MainScript>atmd-gui.py</MainScript>
+  <Vcs>
+    <VcsType>None</VcsType>
+  </Vcs>
+  <FiletypeAssociations>
+    <FiletypeAssociation pattern="*.idl" type="INTERFACES"/>
+    <FiletypeAssociation pattern="*.ptl" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.py" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.pyw" type="SOURCES"/>
+    <FiletypeAssociation pattern="*.qm" type="TRANSLATIONS"/>
+    <FiletypeAssociation pattern="*.qrc" type="RESOURCES"/>
+    <FiletypeAssociation pattern="*.ts" type="TRANSLATIONS"/>
+    <FiletypeAssociation pattern="*.ui" type="FORMS"/>
+    <FiletypeAssociation pattern="*.ui.h" type="FORMS"/>
+  </FiletypeAssociations>
+</Project>
