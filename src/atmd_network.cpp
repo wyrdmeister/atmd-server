@@ -434,6 +434,11 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
   std::string txt;
   uint32_t val1, val2, val3;
 
+#ifdef DEBUG
+  if(enable_debug)
+    rt_syslog(ATMD_DEBUG, "Network [exec_command]: got command '%s'.", command.c_str());
+#endif
+
   // Configuration SET commands
   if(main_command == "SET") {
 

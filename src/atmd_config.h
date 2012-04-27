@@ -1,4 +1,3 @@
-
 /*
  * ATMD Server version 3.0
  *
@@ -43,7 +42,10 @@
  */
 class AtmdConfig {
 public:
-  AtmdConfig() : _rtskbs(0), _tango_ch(0) {
+  AtmdConfig() : _rtskbs(0) {
+#ifdef EN_TANG0
+    _tango_ch = 0;
+#endif
     memset(_rtif, 0, IFNAMSIZ);
     memset(_tdma_dev, 0, IFNAMSIZ);
   };
