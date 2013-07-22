@@ -84,7 +84,7 @@ if test yes = "$en_server"; then
   TARGETS="$TARGETS atmd_server"
 
   dnl Check for libcurl
-  LIBCURL_CHECK_CONFIG([yes], [7])
+  LIBCURL_CHECK_CONFIG(, [7])
   AC_SUBST(CURLLIBS)
 fi
 

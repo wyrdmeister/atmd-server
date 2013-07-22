@@ -127,6 +127,32 @@ int ATMDboard::search_board(uint16_t *addresses, size_t addr_len) {
 
     if(pci_dev->vendor_id == 0x10b5 && pci_dev->device_id == 0x9050) {
 
+      // If ids match, check that IO is enabled for the device
+      // Read PCI device command register
+      uint16_t cmd = pci_read_word(pci_dev, PCI_COMMAND);
+
+      if(!(cmd & PCI_COMMAND_IO)) {
+        // PIO is disabled, we try to enable it
+#ifdef DEBUG
+        if(enable_debug)
+          syslog(ATMD_INFO, "Board [search_board]: PIO disabled. Enabling.");
+#endif
+        pci_write_word(pci_dev, PCI_COMMAND, cmd | PCI_COMMAND_IO);
+
+        // Read again the command register
+        cmd = pci_read_word(pci_dev, PCI_COMMAND);
+
+        if(!(cmd & PCI_COMMAND_IO)) {
+          syslog(ATMD_CRIT, "Board [search_board]: failed to enable PIO on device.");
+        }
+#ifdef DEBUG
+        else {
+          if(enable_debug)
+            syslog(ATMD_INFO, "Board [search_board]: PIO successfully enabled.");
+        }
+#endif
+      }
+      
       // If ids match, check all addresses to find the correct one...
       for(size_t i = 0; i<6; i++) {
         curr_addr = (uint16_t)(pci_dev->base_addr[i] & PCI_ADDR_IO_MASK);
