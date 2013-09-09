@@ -7,19 +7,19 @@
     <x>0</x>
     <y>0</y>
     <width>401</width>
-    <height>246</height>
+    <height>266</height>
    </rect>
   </property>
   <property name="minimumSize">
    <size>
     <width>401</width>
-    <height>246</height>
+    <height>266</height>
    </size>
   </property>
   <property name="maximumSize">
    <size>
     <width>401</width>
-    <height>246</height>
+    <height>266</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -55,7 +55,7 @@
    <property name="geometry">
     <rect>
      <x>230</x>
-     <y>76</y>
+     <y>106</y>
      <width>113</width>
      <height>27</height>
     </rect>
@@ -68,7 +68,7 @@
    <property name="geometry">
     <rect>
      <x>230</x>
-     <y>106</y>
+     <y>136</y>
      <width>113</width>
      <height>27</height>
     </rect>
@@ -81,7 +81,7 @@
    <property name="geometry">
     <rect>
      <x>230</x>
-     <y>136</y>
+     <y>166</y>
      <width>113</width>
      <height>27</height>
     </rect>
@@ -94,7 +94,7 @@
    <property name="geometry">
     <rect>
      <x>19</x>
-     <y>80</y>
+     <y>110</y>
      <width>200</width>
      <height>17</height>
     </rect>
@@ -110,7 +110,7 @@
    <property name="geometry">
     <rect>
      <x>19</x>
-     <y>110</y>
+     <y>140</y>
      <width>200</width>
      <height>17</height>
     </rect>
@@ -126,7 +126,7 @@
    <property name="geometry">
     <rect>
      <x>19</x>
-     <y>140</y>
+     <y>170</y>
      <width>200</width>
      <height>17</height>
     </rect>
@@ -165,13 +165,39 @@
    <property name="geometry">
     <rect>
      <x>280</x>
-     <y>200</y>
+     <y>220</y>
      <width>98</width>
      <height>27</height>
     </rect>
    </property>
    <property name="text">
     <string>Close</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_6">
+   <property name="geometry">
+    <rect>
+     <x>19</x>
+     <y>80</y>
+     <width>200</width>
+     <height>17</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Window time (ms):</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="win_time">
+   <property name="geometry">
+    <rect>
+     <x>230</x>
+     <y>76</y>
+     <width>113</width>
+     <height>27</height>
+    </rect>
    </property>
   </widget>
  </widget>

@@ -704,9 +704,12 @@ class DTcalculator(QtGui.QDialog, Ui_dtcalculator):
     def compute_dt(self):
         """ Compute deadtime
         """
-        num_pk = math.ceil((float(self.counts.text())*1000 - 163) / 165)
-        cycles = math.ceil(num_pk / float(self.tdmaslots.text()))
-        self.deadtime.setText(str(cycles * float(self.cycle.text())))
+        try:
+            num_pk = math.ceil((float(self.counts.text())*float(self.win_time.text()) - 163) / 165)
+            cycles = num_pk / float(self.tdmaslots.text())
+            self.deadtime.setText("%.1f" % (cycles * float(self.cycle.text()), ))
+        except:
+            self.deadtime.setText("n.a.")
 
     @QtCore.pyqtSlot(QtCore.QString)
     def on_counts_textChanged(self, text):
@@ -720,6 +723,11 @@ class DTcalculator(QtGui.QDialog, Ui_dtcalculator):
 
     @QtCore.pyqtSlot(QtCore.QString)
     def on_cycle_textChanged(self, text):
+        """ ... """
+        self.compute_dt()
+
+    @QtCore.pyqtSlot(QtCore.QString)
+    def on_win_time_textChanged(self, text):
         """ ... """
         self.compute_dt()
 
