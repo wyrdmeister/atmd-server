@@ -24,11 +24,14 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import socket
 import re
+import math
+import time
 from select import select
 from PyQt4 import QtCore
 from PyQt4 import QtGui
 from ui.Ui_MainWindow import Ui_MainWindow
 from ui.Ui_savemeasure import Ui_savemeasure
+from ui.Ui_dtcalculator import Ui_dtcalculator
 
 
 class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
@@ -50,7 +53,9 @@ class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
         self.command_log.setReadOnly(True)
         self.connect_button.setEnabled(True)
         self.disconnect_button.setEnabled(False)
-        self.status_label.setText('Unknown')
+        self.status_label.setText('Disconnected')
+        self.start_time = 0
+        self.meas_time = 0
 
         # Valid commands
         self.send_cmd = ("SET", "GET", "MSR", "EXT")
@@ -82,8 +87,28 @@ class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
         if ans[0] == "IDLE" and not self.start_button.isEnabled():
             self.start_button.setDisabled(False)
             self.stop_button.setDisabled(True)
+            self.meas_time = 0
+            self.start_time = 0
+
         elif ans[0] == "RUNNING":
             self.stop_button.setDisabled(False)
+
+        if self.start_time:
+            tt = float(self.meas_time - (time.time() - self.start_time))
+
+            hh = math.trunc(tt / 3600.0);
+            mm = math.trunc((tt - hh*3600.0) / 60.0)
+            ss = tt - (hh * 3600) - (mm * 60)
+            if tt >= 0:
+                self.timeleft.setStyleSheet("color:black; font-weight:normal")
+                timestr = "%02d:%02d:%02d" % (hh, mm, ss)
+            else:
+                self.timeleft.setStyleSheet("color:red; font-weight:bold")
+                timestr = "- %02d:%02d:%02d" % (abs(hh), abs(mm), abs(ss))
+            self.timeleft.setText(timestr)
+        else:
+            self.timeleft.setStyleSheet("color:black; font-weight:normal")
+            self.timeleft.setText("00:00:00")
 
     def write_config(self):
         """ Send configuration to remote server
@@ -411,8 +436,23 @@ class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
     def on_start_button_released(self):
         """ Start a new measure
         """
+        pt = re.compile("(\d+.\d+)([umsMh]?)")
+        mt = pt.match(str(self.measure_time.text()))
+        if mt:
+            unit = mt.group(2)
+            if unit == 's':
+                self.meas_time = float(mt.group(1))
+            elif unit == 'M':
+                self.meas_time = float(mt.group(1))*60
+            elif unit == 'h':
+                self.meas_time = float(mt.group(1))*3600
+            else:
+                self.meas_time = 0
+        else:
+            self.meas_time = 0
         self.send_command("MSR START")
         self.start_button.setDisabled(True)
+        self.start_time = time.time()
 
     @QtCore.pyqtSlot()
     def on_stop_button_released(self):
@@ -468,6 +508,13 @@ class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
                         QtGui.QMessageBox.No);
         if ans == QtGui.QMessageBox.Yes:
             self.send_command("MSR CLR")
+
+    QtCore.pyqtSlot()
+    def on_dt_calculate_released(self):
+        """ Open deadtime calculator.
+        """
+        dl = DTcalculator(self)
+        dl.show()
 
 
 class SaveMeasure(QtGui.QDialog, Ui_savemeasure):
@@ -641,6 +688,46 @@ class MeasureModel(QtCore.QAbstractTableModel):
             elif section == 10:
                 return QtCore.QVariant("Ch. 8")
         return QtCore.QVariant()
+
+
+class DTcalculator(QtGui.QDialog, Ui_dtcalculator):
+
+    def __init__(self, parent=None):
+        """ Constructor
+        """
+        # Parent constructor
+        QtGui.QDialog.__init__(self, parent)
+
+        # Build UI
+        self.setupUi(self)
+
+    def compute_dt(self):
+        """ Compute deadtime
+        """
+        num_pk = math.ceil((float(self.counts.text())*1000 - 163) / 165)
+        cycles = math.ceil(num_pk / float(self.tdmaslots.text()))
+        self.deadtime.setText(str(cycles * float(self.cycle.text())))
+
+    @QtCore.pyqtSlot(QtCore.QString)
+    def on_counts_textChanged(self, text):
+        """ ... """
+        self.compute_dt()
+
+    @QtCore.pyqtSlot(QtCore.QString)
+    def on_tdmaslots_textChanged(self, text):
+        """ ... """
+        self.compute_dt()
+
+    @QtCore.pyqtSlot(QtCore.QString)
+    def on_cycle_textChanged(self, text):
+        """ ... """
+        self.compute_dt()
+
+    @QtCore.pyqtSlot()
+    def on_pb_close_released(self):
+        """ Close dialog
+        """
+        self.close()
 
 
 if __name__ == "__main__":

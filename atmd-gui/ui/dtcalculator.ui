@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>dtcalculator</class>
+ <widget class="QDialog" name="dtcalculator">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>401</width>
+    <height>246</height>
+   </rect>
+  </property>
+  <property name="minimumSize">
+   <size>
+    <width>401</width>
+    <height>246</height>
+   </size>
+  </property>
+  <property name="maximumSize">
+   <size>
+    <width>401</width>
+    <height>246</height>
+   </size>
+  </property>
+  <property name="windowTitle">
+   <string>Deadtime calculator</string>
+  </property>
+  <widget class="QLineEdit" name="counts">
+   <property name="geometry">
+    <rect>
+     <x>230</x>
+     <y>46</y>
+     <width>113</width>
+     <height>27</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>19</x>
+     <y>50</y>
+     <width>200</width>
+     <height>17</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Expected total counts (kc/s):</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="cycle">
+   <property name="geometry">
+    <rect>
+     <x>230</x>
+     <y>76</y>
+     <width>113</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>5</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="tdmaslots">
+   <property name="geometry">
+    <rect>
+     <x>230</x>
+     <y>106</y>
+     <width>113</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>97</string>
+   </property>
+  </widget>
+  <widget class="QLineEdit" name="deadtime">
+   <property name="geometry">
+    <rect>
+     <x>230</x>
+     <y>136</y>
+     <width>113</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="readOnly">
+    <bool>true</bool>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_2">
+   <property name="geometry">
+    <rect>
+     <x>19</x>
+     <y>80</y>
+     <width>200</width>
+     <height>17</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>RTnet master cycle (ms):</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_3">
+   <property name="geometry">
+    <rect>
+     <x>19</x>
+     <y>110</y>
+     <width>200</width>
+     <height>17</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Number of TDMA slots:</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_4">
+   <property name="geometry">
+    <rect>
+     <x>19</x>
+     <y>140</y>
+     <width>200</width>
+     <height>17</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Suggested deadtime (ms):</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label_5">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>10</y>
+     <width>361</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>13</pointsize>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>ATMD-GPX deadtime calculator</string>
+   </property>
+   <property name="alignment">
+    <set>Qt::AlignCenter</set>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pb_close">
+   <property name="geometry">
+    <rect>
+     <x>280</x>
+     <y>200</y>
+     <width>98</width>
+     <height>27</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Close</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

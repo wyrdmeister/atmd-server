@@ -384,9 +384,13 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
     if(board->stop())
       finish_window = true;
 
+    // Empty flag
+    bool isempty = true;
+
     if(en_fifo0) {
       // Read TDC-GPX FIFO0
       if( !(mbs & 0x0800) ) { // FIFO0 not empty
+        isempty = false;
         board->set_dra(0x0008);
         dra_data = board->read_dra();
 
@@ -474,6 +478,7 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
       if(en_fifo1) {
         // Read TDC-GPX FIFO1
         if( !(mbs & 0x1000) ) { // FIFO1 not empty
+          isempty = false;
           board->set_dra(0x0009);
           dra_data = board->read_dra();
 
@@ -556,6 +561,11 @@ int atmd_get_start(ATMDboard* board, RTIME window, RTIME timeout, EventData& eve
           if(finish_window)
             stop_fifo1 = true;
         }
+      }
+
+      if(isempty) {
+        // Both FIFOs are empty, sleeping for 100us
+        rt_task_sleep(100000);
       }
 
       // Check if window time was exceeded

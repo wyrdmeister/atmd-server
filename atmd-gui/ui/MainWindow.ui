@@ -287,7 +287,7 @@
       <rect>
        <x>130</x>
        <y>80</y>
-       <width>131</width>
+       <width>101</width>
        <height>27</height>
       </rect>
      </property>
@@ -351,6 +351,19 @@
      </property>
      <property name="text">
       <string/>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="dt_calculate">
+     <property name="geometry">
+      <rect>
+       <x>230</x>
+       <y>80</y>
+       <width>31</width>
+       <height>27</height>
+      </rect>
+     </property>
+     <property name="text">
+      <string>C</string>
      </property>
     </widget>
    </widget>
@@ -553,7 +566,7 @@
       <x>320</x>
       <y>140</y>
       <width>301</width>
-      <height>151</height>
+      <height>121</height>
      </rect>
     </property>
     <property name="frameShape">
@@ -568,7 +581,7 @@
        <x>10</x>
        <y>50</y>
        <width>281</width>
-       <height>91</height>
+       <height>61</height>
       </rect>
      </property>
     </widget>
@@ -600,7 +613,7 @@
     <property name="geometry">
      <rect>
       <x>320</x>
-      <y>320</y>
+      <y>290</y>
       <width>301</width>
       <height>101</height>
      </rect>
@@ -717,7 +730,7 @@
     <property name="geometry">
      <rect>
       <x>330</x>
-      <y>310</y>
+      <y>280</y>
       <width>161</width>
       <height>17</height>
      </rect>
@@ -750,6 +763,41 @@
     </property>
     <property name="text">
      <string>Read config</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_17">
+    <property name="geometry">
+     <rect>
+      <x>375</x>
+      <y>403</y>
+      <width>101</width>
+      <height>20</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Time left:</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="timeleft">
+    <property name="geometry">
+     <rect>
+      <x>480</x>
+      <y>400</y>
+      <width>131</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>0:00</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+    </property>
+    <property name="readOnly">
+     <bool>true</bool>
     </property>
    </widget>
   </widget>
