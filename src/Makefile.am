@@ -1,7 +1,7 @@
 ## Process this file with automake to produce Makefile.in
 
 bin_PROGRAMS = $(TARGETS)
-EXTRA_PROGRAMS = atmd_server atmd_agent
+EXTRA_PROGRAMS = atmd_server atmd_agent term_rtdev
 
 atmd_server_SOURCES = \
 	atmd_server.cpp \
@@ -26,8 +26,13 @@ atmd_agent_SOURCES = \
 	atmd_rtnet.cpp \
 	atmd_rtcomm.cpp
 
-atmd_server_LDADD = $(XENO_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(XENO_LIBS) $(TANGO_LIBS)
+term_rtdev_SOURCES = term_rtdev.cpp
+
+atmd_server_LDADD = $(XENO_LIBS) $(PCRECPP_LIBS) $(LIBCURL) $(TANGO_LIBS) $(XENO_LIBS)
 atmd_server_CPPFLAGS = $(CPPFLAGS) $(LIBCURL_CPPFLAGS) $(TANGO_CFLAGS) -DATMD_SERVER
 
 atmd_agent_LDADD = $(XENO_LIBS) $(PCRECPP_LIBS) $(PCI_LIBS) $(XENO_LIBS)
 atmd_agent_CPPFLAGS = $(CPPFLAGS) -DATMD_AGENT
+
+term_rtdev_LDADD = $(XENO_LIBS)
+term_rtdev_CPPFLAGS = $(CPPFLAGS)

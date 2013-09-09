@@ -20,8 +20,14 @@ SLAVE_MAC=("00:1B:21:D3:07:5F" "00:1B:21:D3:08:4F")
 #
 # Cycles and slots
 #
+
+# Master cycle and slots with two acam board
+#MASTER_CYCLE=5000
+#MASTER_SLOTS=("0" "2500");
+
+# Master cycle and slots with one acam board
 MASTER_CYCLE=5000
-MASTER_SLOTS=("0" "2500");
+MASTER_SLOTS=("0");
 
 #
 # Enable capture
@@ -103,3 +109,4 @@ case "$1" in
   *)
     echo "Wrong command!"
 esac
+exit 0

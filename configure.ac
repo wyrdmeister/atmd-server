@@ -19,7 +19,7 @@ dnl Enable debug
 AC_ARG_ENABLE(debug, [  --enable-debug  Enable debug code], [en_debug=yes], [])
 
 dnl Define targets
-TARGETS=""
+TARGETS="term_rtdev"
 
 dnl Enable compilation of atmd_server
 AC_ARG_ENABLE(server, [  --enable-server  Enable build of server program], [en_server=yes], [])

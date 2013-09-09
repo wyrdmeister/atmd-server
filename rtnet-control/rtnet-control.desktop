@@ -1,0 +1,7 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=RTnet Control    
+Exec=python /usr/local/lib/rtnet-control/rtnet-control.py 
+Icon=gnome-nettool
+Terminal=false

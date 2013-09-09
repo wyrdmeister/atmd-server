@@ -140,7 +140,7 @@ QGroupBox::title {
      </rect>
     </property>
     <property name="text">
-     <string>pcl-tdc</string>
+     <string>pcacam1</string>
     </property>
    </widget>
    <widget class="QLabel" name="label">

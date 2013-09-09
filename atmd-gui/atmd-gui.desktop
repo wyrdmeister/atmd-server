@@ -1,0 +1,7 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ATMD-GPX Gui
+Exec=python /usr/local/lib/atmd-gui/atmd-gui.py 
+Icon=jockey
+Terminal=false

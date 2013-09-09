@@ -3,4 +3,9 @@ syntax: glob
 src/.deps
 autom4te.cache
 *~
-
+*.pyc
+src/atmd_server
+src/atmd_agent
+src/term_rtdev
+Makefile
+Makefile.in
