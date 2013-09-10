@@ -436,7 +436,7 @@ class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
     def on_start_button_released(self):
         """ Start a new measure
         """
-        pt = re.compile("(\d+.\d+)([umsMh]?)")
+        pt = re.compile("(\d+\.?\d*)([umsMh]?)")
         mt = pt.match(str(self.measure_time.text()))
         if mt:
             unit = mt.group(2)
