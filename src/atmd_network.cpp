@@ -739,7 +739,7 @@ int Network::exec_command(std::string command, VirtualBoard& board) {
 
       // Here we send information on stop channels
       } else if(val1 > 0 && val1 <= board.maxch()) {
-        answer = this->format_command("VAL CH %d %d %d", val1, board.get_rising(val1), board.get_falling(val2));
+        answer = this->format_command("VAL CH %d %d %d", val1, board.get_rising(val1), board.get_falling(val1));
 
       // Here we send back an error because the requested channel is non-existent
       } else {

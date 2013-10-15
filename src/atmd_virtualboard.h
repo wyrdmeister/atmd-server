@@ -157,10 +157,10 @@ public:
 
   // Setup channels
   size_t maxch()const { return _ch_rising.size(); };
-  void enable_rising(size_t ch, bool val) { _ch_rising[ch] = val; };
-  bool get_rising(size_t ch) { return _ch_rising[ch]; };
-  void enable_falling(size_t ch, bool val) { _ch_falling[ch] = val; };
-  bool get_falling(size_t ch) { return _ch_falling[ch]; };
+  void enable_rising(size_t ch, bool val) { _ch_rising[ch-1] = val; };
+  bool get_rising(size_t ch) { return _ch_rising[ch-1]; };
+  void enable_falling(size_t ch, bool val) { _ch_falling[ch-1] = val; };
+  bool get_falling(size_t ch) { return _ch_falling[ch-1]; };
 
   // Setup timings
   bool set_window(const std::string& val) { return _window_time.set(val); };
