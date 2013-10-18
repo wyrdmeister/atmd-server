@@ -1757,9 +1757,9 @@ int VirtualBoard::start_measure() {
     uint8_t falling_mask = 0;
     for(size_t j = 0; j < 8; j++) {
       if(_ch_rising[j+i*8])
-        rising_mask = rising_mask | (0x1 << i);
+        rising_mask = rising_mask | (0x1 << j);
       if(_ch_falling[j+i*8])
-        falling_mask = falling_mask | (0x1 << i);
+        falling_mask = falling_mask | (0x1 << j);
     }
 
     // Channel info

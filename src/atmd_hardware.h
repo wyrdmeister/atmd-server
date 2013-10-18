@@ -69,11 +69,15 @@ public:
     for(size_t i = 0; i < 8; i++)
       if( mask & (0x1 << i) )
         en_rising[i] = true;
+      else
+        en_rising[i] = false;
   };
   void set_falling_mask(uint8_t mask) {
     for(size_t i = 0; i < 8; i++)
       if( mask & (0x1 << i) )
         en_falling[i] = true;
+      else
+        en_falling[i] = false;
   };
   uint8_t get_rising_mask() {
     uint8_t rising = 0x0;
