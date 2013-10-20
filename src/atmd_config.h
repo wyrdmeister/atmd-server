@@ -30,6 +30,8 @@
 #include <net/if.h>
 #include <net/ethernet.h>
 #include <netinet/ether.h>
+#include <pwd.h>
+#include <grp.h>
 
 #include <pcrecpp.h>
 
@@ -46,6 +48,10 @@ public:
 #ifdef EN_TANG0
     _tango_ch = 0;
 #endif
+#ifdef ATMD_SERVER
+    _uid = 0;
+    _gid = 0;
+#endif
     memset(_rtif, 0, IFNAMSIZ);
     memset(_tdma_dev, 0, IFNAMSIZ);
   };
@@ -54,12 +60,22 @@ public:
   // Open the give file an read configuration from it
   int read(const std::string& filename);
 
+#ifdef ATMD_SERVER
   // Get an agent address
   const struct ether_addr* get_agent(size_t id)const { return &(agent_addr[id]); };
 
   // Get the number of agent addresses
   size_t agents()const { return agent_addr.size(); };
 
+  // UID to save files
+  uid_t uid()const { return _uid; }
+  void uid(uid_t num) { _uid = num; }
+
+  // GID to save files
+  gid_t gid()const { return _gid; }
+  void gid(gid_t num) { _gid = num; }
+#endif
+  
   // Return a pointer to RTSKBS
   unsigned int rtskbs()const { return _rtskbs; };
 
@@ -74,15 +90,27 @@ public:
   int8_t tango_ch()const { return _tango_ch; };
 #endif
 
+
   // Clear config
   void clear() {
+#ifdef ATMD_SERVER
     agent_addr.clear();
+#endif
   };
 
+
 private:
+#ifdef ATMD_SERVER
   // Agent addresses
   std::vector<struct ether_addr> agent_addr;
 
+  // UID
+  uid_t _uid;
+
+  // GID
+  gid_t _gid;
+#endif
+  
   // RTSKBS
   unsigned int _rtskbs;
 

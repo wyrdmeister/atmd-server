@@ -1334,18 +1334,6 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
   if(filename[0] == '/')
   filename.erase(0,1);
 
-  // Find 'user' uid
-  uid_t uid = 0;
-  struct passwd *pwd = getpwnam("user");
-  if(pwd != NULL)
-    uid = pwd->pw_uid;
-
-  // Find 'user' gid
-  gid_t gid = 0;
-  struct group* grp = getgrnam("user");
-  if(grp != NULL)
-    gid = grp->gr_gid;
-
   // For safety the supplied path is taken relative to /home/data
   std::string fullpath = "/home/data/";
 
@@ -1366,7 +1354,7 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
         }
 
         // Change owner to 'user'
-        if(chown(fullpath.c_str(), uid, gid)) {
+        if(chown(fullpath.c_str(), _config.uid(), _config.gid())) {
           rt_syslog(ATMD_WARN, "VirtualBoard [measure2file]: error changing owner for director \"%s\" (Error %s).", fullpath.c_str(), strerror(errno));
         }
 
@@ -1704,7 +1692,7 @@ int VirtualBoard::measure2file(const std::vector<StartData*>& starts, const std:
 
   // Change owner to file
   if(_format != ATMD_FORMAT_MATPS2_FTP && _format != ATMD_FORMAT_MATPS3_FTP) {
-    if(chown(fullpath.c_str(), uid, gid))
+    if(chown(fullpath.c_str(), _config.uid(), _config.gid()))
       rt_syslog(ATMD_ERR, "Measure [measure2file]: cannot change owner of file \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));
     if(chmod(fullpath.c_str(), S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP|S_IROTH))
       rt_syslog(ATMD_ERR, "Measure [measure2file]: cannot change mode of file \"%s\" (Error: %s).", fullpath.c_str(), strerror(errno));

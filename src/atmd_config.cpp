@@ -106,6 +106,41 @@ int AtmdConfig::read(const std::string& filename) {
       }
 #endif
 
+// NOTE: the user and group commands are defined only for the server part
+#ifdef ATMD_SERVER
+      // User command
+      conf_re = "^user ([A-Za-z0-9_-]+)";
+      if(conf_re.PartialMatch(line, &txt)) {
+#ifdef DEBUG
+        if(enable_debug)
+          syslog(ATMD_DEBUG, "Config [read]: found user name '%s'.", txt.c_str());
+#endif
+        struct passwd *pwd = getpwnam(txt.c_str());
+        if(pwd != NULL) {
+          _uid = pwd->pw_uid;
+        } else {
+          syslog(ATMD_WARN, "Config [read]: ignoring invalid user name '%s'.", txt.c_str());
+        }
+        continue;
+      }
+
+      // Group command
+      conf_re = "^group ([A-Za-z0-9_-]+)";
+      if(conf_re.PartialMatch(line, &txt)) {
+#ifdef DEBUG
+        if(enable_debug)
+          syslog(ATMD_DEBUG, "Config [read]: found group name '%s'.", txt.c_str());
+#endif
+        struct group* grp = getgrnam(txt.c_str());
+        if(grp != NULL) {
+            _gid = grp->gr_gid;
+        } else {
+          syslog(ATMD_WARN, "Config [read]: ignoring invalid group name '%s'.", txt.c_str());
+        }
+        continue;
+      }
+#endif
+
       // Number of RTSKBS
       conf_re = "^rtskbs (\\d+)";
       if(conf_re.PartialMatch(line, &_rtskbs)) {
