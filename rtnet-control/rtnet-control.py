@@ -23,9 +23,28 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import time
-from subprocess import check_output
-from subprocess import CalledProcessError
 import shlex
+
+try:
+    from subprocess import check_output
+    from subprocess import CalledProcessError
+except ImportError as e:
+    # Old python
+    import commands
+
+    class CalledProcessError(Exception):
+        def __init__(self, code, output):
+            Exception.__init__(self, "Error {:d}".format(code))
+            self.returncode = code
+            self.output = output
+
+    def check_output(command, shell=False):
+        (code, out) = commands.getstatusoutput(command)
+        if code == 0:
+            return out
+        else:
+            raise CalledProcessError(code, out)
+
 
 # Import PyQt
 from PyQt4 import QtCore
