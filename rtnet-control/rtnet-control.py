@@ -45,6 +45,15 @@ except ImportError as e:
         else:
             raise CalledProcessError(code, out)
 
+try:
+    from shlex import quote
+except ImportError as e:
+    try:
+        from pipes import quote
+    except ImportError as e:
+        print("ERROR: cannot safely proceed without an implementation of quote()")
+        exit(0)
+
 
 # Import PyQt
 from PyQt4 import QtCore
@@ -87,7 +96,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """ Display an error message
         """
         QtGui.QMessageBox.warning(self, title, message)
-
+lex
     @QtCore.pyqtSlot(QtCore.QTimerEvent)
     def timerEvent(self, event):
         """ Timer event handler
@@ -107,14 +116,14 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
         try:
-            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(shlex.quote(self.agent_host1.text())), shell=True)
+            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(quote(self.agent_host1.text())), shell=True)
             self.rtnet_slave1 = (out != '')
         except CalledProcessError as e:
             self.rtnet_slave1 = False
             print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
         try:
-            out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(shlex.quote(self.agent_host1.text())), shell=True)
+            out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(quote(self.agent_host1.text())), shell=True)
             self.atmd_agent1 = (out != '')
         except CalledProcessError as e:
             self.atmd_agent1 = False
@@ -122,14 +131,14 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
 
         if self.en_2nd.isChecked():
             try:
-                out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(shlex.quote(self.agent_host2.text())), shell=True)
+                out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(quote(self.agent_host2.text())), shell=True)
                 self.rtnet_slave2 = (out != '')
             except CalledProcessError as e:
                 self.rtnet_slave2 = False
                 print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
             try:
-                out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(shlex.quote(self.agent_host2.text())), shell=True)
+                out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(quote(self.agent_host2.text())), shell=True)
                 self.atmd_agent2 = (out != '')
             except CalledProcessError as e:
                 self.atmd_agent2 = False
@@ -193,10 +202,10 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         try:
             self.command_output.appendPlainText(" => Starting RTnet slave on {0:}:".format(host))
-            out = check_output('ssh root@{0:} "rtnet.slave start {0:}"'.format(shlex.quote(host), agents), shell=True)
+            out = check_output('ssh root@{0:} "rtnet.slave start {0:}"'.format(quote(host), agents), shell=True)
             self.command_output.appendPlainText(out)
             self.command_output.appendPlainText(" => Checking packet delay:")
-            out = check_output('ssh root@{0:} "dmesg | grep \'TDMA: calibrated\' | tail -n 1"'.format(shlex.quote(host)), shell=True)
+            out = check_output('ssh root@{0:} "dmesg | grep \'TDMA: calibrated\' | tail -n 1"'.format(quote(host)), shell=True)
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
@@ -220,7 +229,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         try:
             self.command_output.appendPlainText(" => Stopping RTnet slave on {0:}:".format(host))
-            out = check_output('ssh root@{0:} "rtnet.slave stop"'.format(shlex.quote(host)), shell=True)
+            out = check_output('ssh root@{0:} "rtnet.slave stop"'.format(quote(host)), shell=True)
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
@@ -290,7 +299,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         try:
             self.command_output.appendPlainText(" => Starting ATMD-GPX agent on {0:}:".format(host))
-            out = check_output('ssh root@{0:} "service atmd_agent start"'.format(shlex.quote(host)), shell=True)
+            out = check_output('ssh root@{0:} "service atmd_agent start"'.format(quote(host)), shell=True)
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
@@ -314,10 +323,10 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         try:
             self.command_output.appendPlainText(" => Stopping ATMD-GPX agent on {0:}:".format(host))
-            out = check_output('ssh root@{0:} "service atmd_agent stop"'.format(shlex.quote(host)), shell=True)
+            out = check_output('ssh root@{0:} "service atmd_agent stop"'.format(quote(host)), shell=True)
             self.command_output.appendPlainText(out)
             # Check RT file descriptors
-            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index" | awk \'{print $1}\''.format(shlex.quote(host)), shell=True)
+            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index" | awk \'{print $1}\''.format(quote(host)), shell=True)
             if out != '':
                 id = map(int, out.split('\n'))
                 out = check_output('ssh root@{0:} "term_rtdev {1:d} {2:d}"'.format(host, min(id), max(id)), shell=True)
