@@ -101,10 +101,10 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
             ss = tt - (hh * 3600) - (mm * 60)
             if tt >= 0:
                 self.timeleft.setStyleSheet("color:black; font-weight:normal")
-                timestr = "%02d:%02d:%02d" % (hh, mm, ss)
+                timestr = "{:02d}:{:02d}:{:02d}".format(hh, mm, ss)
             else:
                 self.timeleft.setStyleSheet("color:red; font-weight:bold")
-                timestr = "- %02d:%02d:%02d" % (abs(hh), abs(mm), abs(ss))
+                timestr = "- {:02d}:{:02d}:{:02d}".format(abs(hh), abs(mm), abs(ss))
             self.timeleft.setText(timestr)
         else:
             self.timeleft.setStyleSheet("color:black; font-weight:normal")
@@ -115,27 +115,27 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
         """
         # Acquisition times
         if self.measure_time.text() != '0u':
-            ans = self.send_command("SET TT %s" % (str(self.measure_time.text()), ))
+            ans = self.send_command("SET TT {:}".format(self.measure_time.text()))
             if not ans:
                 self.error("Error configuring measure time.")
         if self.window_time.text() != '0u':
-            ans = self.send_command("SET ST %s" % (str(self.window_time.text()), ))
+            ans = self.send_command("SET ST {:}".format(self.window_time.text()))
             if not ans:
                 self.error("Error configuring window time.")
         if self.deadtime.text() != '0u':
-            ans = self.send_command("SET TD %s" % (str(self.deadtime.text()), ))
+            ans = self.send_command("SET TD {:}".format(self.deadtime.text()))
             if not ans:
                 self.error("Error configuring deadtime.")
         # Autosave mode
         if self.automatic_save.isChecked():
             if self.save_prefix.text() != '':
-                ans = self.send_command("SET PREFIX %s" % (str(self.save_prefix.text()), ))
+                ans = self.send_command("SET PREFIX {:}".format(self.save_prefix.text()))
                 if not ans:
                     self.error("Error configuring save prefix.")
             else:
                 self.error("In autosave mode a prefix is required!")
-            if self.autosave_count.text().toInt()[0] != 0:
-                ans = self.send_command("SET AUTOSAVE %d" % (self.autosave_count.text().toInt()[0], ))
+            if int(self.autosave_count.text()) != 0:
+                ans = self.send_command("SET AUTOSAVE {:d}".format(int(self.autosave_count.text())))
                 if not ans:
                     self.error("Error configuring autosave count.")
             else:
@@ -150,8 +150,8 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
         if not ans:
             self.error("Error configuring save format.")
         # Configure monitor
-        if self.monitor_count.text().toInt()[0] != 0 and self.monitor_save.text().toInt()[0] != 0 and self.monitor_name.text() != '':
-            ans = self.send_command("SET MONITOR %d %d %s" % (self.monitor_save.text().toInt()[0], self.monitor_count.text().toInt()[0], str(self.monitor_name.text())))
+        if int(self.monitor_count.text()) != 0 and int(self.monitor_save.text()) != 0 and self.monitor_name.text() != '':
+            ans = self.send_command("SET MONITOR {:d} {:d} {:}".format(int(self.monitor_save.text()), int(self.monitor_count.text()), self.monitor_name.text()))
             if not ans:
                 self.error("Error configuring monitor.")
         else:
@@ -198,15 +198,14 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                 good = True
                 break
         if not good:
-            self.error("Sending wrong command '%s'" % (command, ))
+            self.error("Sending wrong command '{:}'".format(command))
             return None
 
         # Send command
         try:
             self.sock.sendall(command + "\n")
             if not nolog:
-                self.command_log.appendPlainText("S: %s" % (command, ))
-            #self.emit(QtCore.SIGNAL("msg(QString)"),QtCore.QString("S: "+command))
+                self.command_log.appendPlainText("S: {:}".format(command))
         except socket.error as msg:
             self.error(str(msg), "Network error")
             return None
@@ -215,8 +214,7 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
         ans = self.get_command()
         if ans:
             if not nolog:
-                self.command_log.appendPlainText("R: %s" % (" ".join(ans), ))
-            #self.emit(QtCore.SIGNAL("msg(QString)"),QtCore.QString("R: "+" ".join(ans)))
+                self.command_log.appendPlainText("R: {:}".format(" ".join(ans)))
             # Interpret answer
             if command[:3] == 'SET':
                 if ans[0] == 'ACK':
@@ -224,9 +222,9 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                     return (1, )
                 elif ans[0] == 'ERR':
                     # An error occurred
-                    self.error("The command '%s' returned error '%s'" % (command, ans[1]))
+                    self.error("The command '{:}' returned error '{:}'".format(command, ans[1]))
                 else:
-                    self.error("The command '%s' returned an unexpected response '%s'" % (command, " ".join(ans)))
+                    self.error("The command '{:}' returned an unexpected response '{:}'".format(command, " ".join(ans)))
 
             elif command[:3] == 'GET':
                 id = ans[1].find(" ")
@@ -259,12 +257,12 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                 elif ans[1][:id] == 'CH':
                     pass
                 elif ans[1][:id] == 'TT' or ans[1][:id] == 'ST' or ans[1][:id] == 'TD':
-                    p = re.compile(r"%s (?P<time>\d+\.?\d*[umsMh]{1})" % (ans[1][:id], ))
+                    p = re.compile(r"{:} (?P<time>\d+\.?\d*[umsMh]{1})".format(ans[1][:id]))
                     m = p.match(ans[1])
                     if m:
                         return (m.groupdict()['time'], )
                     else:
-                        self.error("Got a malformed timestring '%s'." % (ans[id + 1:], ))
+                        self.error("Got a malformed timestring '{:}'.".format(ans[id + 1:], ))
                 elif ans[1][:id] == 'RS':
                     pass
                 elif ans[1][:id] == 'OF':
@@ -284,7 +282,7 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                         else:
                             return (m.groupdict()['prefix'], )
                     else:
-                        self.error("Got a malformed prefix '%s'." % (ans[id + 1:], ))
+                        self.error("Got a malformed prefix '{:}'.".format(ans[id + 1:]))
                 elif ans[1][:id] == 'FORMAT':
                     pass
                 elif ans[1][:id] == 'AUTOSAVE':
@@ -293,14 +291,14 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                     if m:
                         return (m.groupdict()['count'], )
                     else:
-                        self.error("Got a malformed autosave count '%s'." % (ans[id + 1:], ))
+                        self.error("Got a malformed autosave count '{:}'.".format(ans[id + 1:]))
                 elif ans[1][:id] == 'MONITOR':
                     p = re.compile(r"MONITOR (?P<save>\d+) (?P<count>\d+)\s*(?P<file>[a-zA-Z0-9\.\_\-\/]*)")
                     m = p.match(ans[1])
                     if m:
                         return (int(m.groupdict()['save']), int(m.groupdict()['count']), m.groupdict()['file'])
                     else:
-                        self.error("Got a malformed monitor configuration '%s'." % (ans[id + 1:], ))
+                        self.error("Got a malformed monitor configuration '{:}'.".format(ans[id + 1:]))
                 else:
                     pass
 
@@ -310,7 +308,7 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                     return (1, )
                 elif ans[0] == 'ERR':
                     # An error occurred
-                    self.error("The command '%s' returned error '%s'" % (command, ans[1]))
+                    self.error("The command '{:}' returned error '{:}'".format(command, ans[1]))
                 elif ans[0] == 'MSR':
                     id = ans[1].find(" ")
                     # Status and list
@@ -343,7 +341,7 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
                     else:
                         pass
                 else:
-                    self.error("The command '%s' returned an unexpected response '%s'" % (command, " ".join(ans)))
+                    self.error("The command '{:}' returned an unexpected response '{:}'".format(command, " ".join(ans)))
 
             elif command[:3] == 'EXT':
                 pass
@@ -393,7 +391,7 @@ class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
         """
         try:
             # Create socket
-            self.sock = socket.create_connection((str(self.server_address.text()), self.server_port.text().toInt()[0]))
+            self.sock = socket.create_connection((self.server_address.text(), int(self.server_port.text())))
             self.connect_button.setEnabled(False)
             self.disconnect_button.setEnabled(True)
 
@@ -538,7 +536,7 @@ class SaveMeasure(QtGui.QDialog, Ui_savemeasure):
         # Get measure list
         mlist = self.parent.send_command("MSR LST")
         for i in range(mlist[0]):
-            ans = self.parent.send_command("MSR STAT -%d" % (i, ))
+            ans = self.parent.send_command("MSR STAT -{:d}".format(i))
             mlist[1][i] = mlist[1][i] + ans[1:]
 
         # Setup QTableView
@@ -613,10 +611,10 @@ class SaveMeasure(QtGui.QDialog, Ui_savemeasure):
                     "You must select a measurement.")
             return
 
-        print "Saving measure %d..." % (r, )
+        print("Saving measure {:d}...".format(r))
         filename = self.check_filename(str("/home/data/"+self.filename.text()))
         if filename:
-            ans = self.parent.send_command("MSR SAV %d %s" % (r, filename))
+            ans = self.parent.send_command("MSR SAV {:d} {:}".format(r, filename))
             if ans:
                 QtGui.QMessageBox.information(
                                 self,
@@ -707,26 +705,26 @@ class DTcalculator(QtGui.QDialog, Ui_dtcalculator):
         try:
             num_pk = math.ceil((float(self.counts.text())*float(self.win_time.text()) - 163) / 165)
             cycles = num_pk / float(self.tdmaslots.text())
-            self.deadtime.setText("%.1f" % (cycles * float(self.cycle.text()), ))
+            self.deadtime.setText("{:.1f}".format(cycles * float(self.cycle.text())))
         except:
             self.deadtime.setText("n.a.")
 
-    @QtCore.pyqtSlot(QtCore.QString)
+    @QtCore.pyqtSlot(str)
     def on_counts_textChanged(self, text):
         """ ... """
         self.compute_dt()
 
-    @QtCore.pyqtSlot(QtCore.QString)
+    @QtCore.pyqtSlot(str)
     def on_tdmaslots_textChanged(self, text):
         """ ... """
         self.compute_dt()
 
-    @QtCore.pyqtSlot(QtCore.QString)
+    @QtCore.pyqtSlot(str)
     def on_cycle_textChanged(self, text):
         """ ... """
         self.compute_dt()
 
-    @QtCore.pyqtSlot(QtCore.QString)
+    @QtCore.pyqtSlot(str)
     def on_win_time_textChanged(self, text):
         """ ... """
         self.compute_dt()

@@ -23,7 +23,9 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import time
-import commands
+from subprocess import check_output
+from subprocess import CalledProcessError
+import shlex
 
 # Import PyQt
 from PyQt4 import QtCore
@@ -54,10 +56,6 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         self.atmd_agent1 = False
         self.atmd_agent2 = False
 
-        # Connect signal to update status
-        self.sig_status.connect(self.update_indicator)
-
-        # Start timer
         # Start timer
         self.startTimer(2000)
 
@@ -75,42 +73,48 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
     def timerEvent(self, event):
         """ Timer event handler
         """
-        out = commands.getstatusoutput('cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM')
-        if out[0] == 0 or (out[0] == 256 and out[1] == ''):
-            self.rtnet_master = (out[1] != '')
-        else:
-            print("Error: [{0:}] {1:}".format(*out))
+        try:
+            out = check_output('cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM', shell=True)
+            self.rtnet_master = (out != '')
+        except CalledProcessError as e:
+            self.rtnet_master = False
+            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        out = commands.getstatusoutput('ps -e | grep atmd_server')
-        if out[0] == 0 or (out[0] == 256 and out[1] == ''):
-            self.atmd_server = (out[1] != '')
-        else:
-            print("Error: [{0:}] {1:}".format(*out))
+        try:
+            out = check_output('ps -e | grep atmd_server', shell=True)
+            self.atmd_server = (out != '')
+        except CalledProcessError as e:
+            self.atmd_server = False
+            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        out = commands.getstatusoutput('ssh root@{:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(self.agent_host1.text()))
-        if out[0] == 0 or (out[0] == 256 and out[1] == ''):
-            self.rtnet_slave1 = (out[1] != '')
-        else:
-            print("Error: [{0:}] {1:}".format(*out))
+        try:
+            out = check_output('ssh root@{:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(shlex.quote(self.agent_host1.text())), shell=True)
+            self.rtnet_slave1 = (out != '')
+        except CalledProcessError as e:
+            self.rtnet_slave1 = False
+            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        out = commands.getstatusoutput('ssh root@{:} "ps -e | grep atmd-agent"'.format(self.agent_host1.text()))
-        if out[0] == 0 or (out[0] == 256 and out[1] == ''):
-            self.atmd_agent1 = (out[1] != '')
-        else:
-            print("Error: [{0:}] {1:}".format(*out))
+        try:
+            out = check_output('ssh root@{:} "ps -e | grep atmd-agent"'.format(shlex.quote(self.agent_host1.text())), shell=True)
+            self.atmd_agent1 = (out != '')
+        except CalledProcessError as e:
+            self.atmd_agent1 = False
+            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        if self.en_2nd.checked():
-            out = commands.getstatusoutput('ssh root@{:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(self.agent_host2.text()))
-            if out[0] == 0 or (out[0] == 256 and out[1] == ''):
-                self.rtnet_slave2 = (out[1] != '')
-            else:
-                print("Error: [{0:}] {1:}".format(*out))
+        if self.en_2nd.isChecked():
+            try:
+                out = check_output('ssh root@{:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(shlex.quote(self.agent_host2.text())), shell=True)
+                self.rtnet_slave2 = (out != '')
+            except CalledProcessError as e:
+                self.rtnet_slave2 = False
+                print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-            out = commands.getstatusoutput('ssh root@{:} "ps -e | grep atmd-agent"'.format(self.agent_host2.text()))
-            if out[0] == 0 or (out[0] == 256 and out[1] == ''):
-                self.atmd_agent2 = (out[1] != '')
-            else:
-                print("Error: [{0:}] {1:}".format(*out))
+            try:
+                out = check_output('ssh root@{:} "ps -e | grep atmd-agent"'.format(shlex.quote(self.agent_host2.text())), shell=True)
+                self.atmd_agent2 = (out != '')
+            except CalledProcessError as e:
+                self.atmd_agent2 = False
+                print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
         else:
             self.rtnet_slave2 = True
             self.atmd_agent2 = True
@@ -147,44 +151,62 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.status_atmd_agent.setText('Stopped')
             self.status_atmd_agent.setStyleSheet('QLabel { color: #C80000; }')
 
-        self.status_toggle.setValue((self.status_toggle.value()+25)%100)
+        val = self.status_toggle.value()+25;
+        if val > 100:
+            val = 0
+        self.status_toggle.setValue(val)
 
 
     def start_rtnet_master(self, agents):
         """ Start RTNet master
         """
         self.command_output.appendPlainText(" => Starting RTnet master:")
-        (code, out) = commands.getstatusoutput('sudo rtnet.master start {:d}'.format(agents))
-        self.command_output.appendPlainText(out)
-        return code
+        try:
+            out = check_output('sudo rtnet.master start {:d}'.format(agents), shell=True)
+            self.command_output.appendPlainText(out)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     def start_rtnet_slave(self, host, agents):
         """ Start RTNet slave
         """
-        self.command_output.appendPlainText(" => Starting RTnet slave on {:}:".format(host))
-        (code, out) = commands.getstatusoutput('ssh root@{:} "rtnet.slave start {:}"'.format(host, agents))
-        self.command_output.appendPlainText(out)
-        if code == 0:
+        try:
+            self.command_output.appendPlainText(" => Starting RTnet slave on {:}:".format(host))
+            out = check_output('ssh root@{:} "rtnet.slave start {:}"'.format(shlex.quote(host), agents), shell=True)
+            self.command_output.appendPlainText(out)
             self.command_output.appendPlainText(" => Checking packet delay:")
-            (c, o) = commands.getstatusoutput('ssh root@{:} "dmesg | grep \'TDMA: calibrated\' | tail -n 1"'.format(host))
-            self.command_output.appendPlainText(o)
-        return code
+            out = check_output('ssh root@{:} "dmesg | grep \'TDMA: calibrated\' | tail -n 1"'.format(shlex.quote(host)), shell=True)
+            self.command_output.appendPlainText(out)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     def stop_rtnet_master(self):
         """ Stop RTNet master
         """
-        self.command_output.appendPlainText(" => Stopping RTnet master:")
-        (code, out) = commands.getstatusoutput('sudo rtnet.master stop')
-        self.command_output.appendPlainText(out)
-        return code
+        try:
+            self.command_output.appendPlainText(" => Stopping RTnet master:")
+            out = check_output('sudo rtnet.master stop', shell=True)
+            self.command_output.appendPlainText(out)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     def stop_rtnet_slave(self, host):
         """ Stop RTNet slave
         """
-        self.command_output.appendPlainText(" => Stopping RTnet slave on {:}:".format(host))
-        (code, out) = commands.getstatusoutput('ssh root@{:} "rtnet.slave stop"'.format(host))
-        self.command_output.appendPlainText(out)
-        return code
+        try:
+            self.command_output.appendPlainText(" => Stopping RTnet slave on {:}:".format(host))
+            out = check_output('ssh root@{:} "rtnet.slave stop"'.format(shlex.quote(host)), shell=True)
+            self.command_output.appendPlainText(out)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     @QtCore.pyqtSlot()
     def on_rtnet_start_released(self):
@@ -193,13 +215,13 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         # Number of agents
         agents = 1
-        if self.en_2nd.checked():
+        if self.en_2nd.isChecked():
             agents = 2
 
         # Clean log
         self.command_output.setPlainText('')
 
-        if not self.rtnet_master and not self.rtnet_slave:
+        if not self.rtnet_master and not self.rtnet_slave1 and not (self.en2nd.isChecked() and self.rtnet_slave2):
             # Start rtnet master
             if self.start_rtnet_master(agents) == 0:
                 # Wait for the master to settle...
@@ -208,7 +230,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
                 # Start first slave
                 if self.start_rtnet_slave(self.agent_host1.text(), agents) == 0:
                     # Success. Start second slave if needed
-                    if self.en_2nd.checked():
+                    if self.en_2nd.isChecked():
                         if self.start_rtnet_slave(self.agent_host2.text(), agents) == 0:
                             # Success
                             return
@@ -237,7 +259,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             if self.rtnet_slave1:
                 if self.stop_rtnet_slave(self.agent_host1.text()):
                     self.error("Faild to stop RTNet slave on {:}".format(self.agent_host1.text()))
-            if self.en_2nd.checked() and self.rtnet_slave2:
+            if self.en_2nd.isChecked() and self.rtnet_slave2:
                 if self.stop_rtnet_slave(self.agent_host2.text()):
                     self.error("Faild to stop RTNet slave on {:}".format(self.agent_host2.text()))
             if self.rtnet_master:
@@ -247,60 +269,61 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
     def start_amtd_agent(self, host):
         """ Start ATMD agent
         """
-        self.command_output.appendPlainText(" => Starting ATMD-GPX agent on {:}:".format(host))
-        (code, out) = commands.getstatusoutput('ssh root@{:} "service atmd_agent start"'.format(host))
-        self.command_output.appendPlainText(out)
-        return code
+        try:
+            self.command_output.appendPlainText(" => Starting ATMD-GPX agent on {:}:".format(host))
+            out = check_output('ssh root@{:} "service atmd_agent start"'.format(shlex.quote(host)), shell=True)
+            self.command_output.appendPlainText(out)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     def start_atmd_server(self):
         """ Start ATMD server
         """
-        self.command_output.appendPlainText(" => Starting ATMD-GPX server:")
-        (code, out) = commands.getstatusoutput('sudo service atmd_server start')
-        self.command_output.appendPlainText(out)
-        return code
+        try:
+            self.command_output.appendPlainText(" => Starting ATMD-GPX server:")
+            out = check_output('sudo service atmd_server start', shell=True)
+            self.command_output.appendPlainText(out)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     def stop_atmd_agent(self, host):
         """ Stop ATMD agent
         """
-        self.command_output.appendPlainText(" => Stopping ATMD-GPX agent on {:}:".format(host))
-        (code, out) = commands.getstatusoutput('ssh root@{:} "service atmd_agent stop"'.format(host))
-        self.command_output.appendPlainText(out)
-        if code == 0:
+        try:
+            self.command_output.appendPlainText(" => Stopping ATMD-GPX agent on {:}:".format(host))
+            out = check_output('ssh root@{:} "service atmd_agent stop"'.format(shlex.quote(host)), shell=True)
+            self.command_output.appendPlainText(out)
             # Check RT file descriptors
-            (c, o) = commands.getstatusoutput('ssh root@{:} "cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index" | awk \'{print $1}\''.format(host))
-            if c == 0:
-                if o != '':
-                    id = map(int, o.split('\n'))
-                    (c, o) = commands.getstatusoutput('ssh root@{:} "term_rtdev {:d} {:d}"'.format(host, min(id), max(id)))
-                    if c:
-                        self.command_output.appendPlainText("ERROR: failed to close open RT handles on {:}".format(host))
-                        return -1
-            else:
-                self.command_output.appendPlainText("ERROR: cannot access RT handle list on {:}".format(host))
-                return -1
-        return code
+            out = check_output('ssh root@{:} "cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index" | awk \'{print $1}\''.format(shlex.quote(host)), shell=True)
+            if out != '':
+                id = map(int, out.split('\n'))
+                out = check_output('ssh root@{:} "term_rtdev {:d} {:d}"'.format(host, min(id), max(id)), shell=True)
+            return 0
+
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     def stop_atmd_server(self):
         """ Stop ATMD server
         """
-        self.command_output.appendPlainText(" => Stopping ATMD-GPX server:")
-        (code, out) = commands.getstatusoutput('sudo service atmd_server stop')
-        self.command_output.appendPlainText(out)
-        if code == 0:
+        try:
+            self.command_output.appendPlainText(" => Stopping ATMD-GPX server:")
+            out = check_output('sudo service atmd_server stop', shell=True)
+            self.command_output.appendPlainText(out)
             # Check RT file descriptors
-            (c, o) = commands.getstatusoutput('cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index | awk \'{print $1}\'')
-            if c == 0:
-                if o != '':
-                    id = map(int, o.split('\n'))
-                    (c, o) = commands.getstatusoutput('term_rtdev {:d} {:d}'.format(min(id), max(id)))
-                    if c:
-                        self.command_output.appendPlainText("ERROR: failed to close open RT handles")
-                        return -1
-            else:
-                self.command_output.appendPlainText("ERROR: cannot access RT handle list")
-                return -1
-        return code
+            out = check_output('cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index | awk \'{print $1}\'', shell=True)
+            if out != '':
+                id = map(int, out.split('\n'))
+                out= check_output('term_rtdev {:d} {:d}'.format(min(id), max(id)), shell=True)
+            return 0
+        except CalledProcessError as e:
+            self.command_output.appendPlainText(e.output)
+            return e.returncode
 
     @QtCore.pyqtSlot()
     def on_atdm_start_released(self):
@@ -308,11 +331,11 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         self.command_output.setPlainText('')
         if self.rtnet_master and self.rtnet_slave:
-            if not self.atmd_agent and not self.atmd_server:
+            if not self.atmd_agent1 and not (self.en2nd.isChecked() and self.atmd_agent2) and not self.atmd_server:
                 # Start first agent
                 if self.start_atmd_agent(self.agent_host1.text()) == 0:
                     # Success. Start second agent if needed
-                    if self.en_2nd.checked():
+                    if self.en_2nd.isChecked():
                         if self.start_atmd_agent(self.agent_host2.text()):
                             # Failed
                             self.stop_atmd_agent(self.agent_host1.text())
@@ -322,7 +345,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
                     if self.start_atmd_server():
                         # Failed... stop agents
                         self.stop_atmd_agent(self.agent_host1.text())
-                        if self.en_2nd.checked():
+                        if self.en_2nd.isChecked():
                             self.stop_atmd_agent(self.agent_host2.text())
                         self.error("Error starting ATMD-GPX server")
                 else:
@@ -344,7 +367,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         if self.atmd_agent1:
             if self.stop_atmd_agent(self.agent_host1.text()):
                 self.error("Error stopping ATMD-GPX agent on {:}".format(self.agent_host1.text()))
-        if self.en_2nd.checked() and self.atmd_agent2:
+        if self.en_2nd.isChecked() and self.atmd_agent2:
             if self.stop_atmd_agent(self.agent_host2.text()):
                 self.error("Error stopping ATMD-GPX agent on {:}".format(self.agent_host2.text()))
 
@@ -353,6 +376,13 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """ Exit button callback
         """
         self.close()
+
+    @QtCore.pyqtSlot(bool)
+    def on_en_2nd_toggled(self, checked):
+        if checked:
+            self.agent_host2.setDisabled(False)
+        else:
+            self.agent_host2.setDisabled(True)
 
 
 if __name__ == "__main__":
