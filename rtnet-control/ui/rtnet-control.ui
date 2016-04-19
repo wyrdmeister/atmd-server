@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
+ <class>rtnet_control</class>
+ <widget class="QMainWindow" name="rtnet_control">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -18,7 +18,7 @@
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>50</y>
+      <y>80</y>
       <width>231</width>
       <height>81</height>
      </rect>
@@ -76,7 +76,7 @@ QGroupBox::title {
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>140</y>
+      <y>170</y>
       <width>231</width>
       <height>81</height>
      </rect>
@@ -130,7 +130,7 @@ QGroupBox::title {
      </property>
     </widget>
    </widget>
-   <widget class="QLineEdit" name="agent_host">
+   <widget class="QLineEdit" name="agent_host1">
     <property name="geometry">
      <rect>
       <x>131</x>
@@ -140,27 +140,30 @@ QGroupBox::title {
      </rect>
     </property>
     <property name="text">
-     <string>pcacam1</string>
+     <string>pcl-tdc</string>
     </property>
    </widget>
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>50</x>
+      <x>47</x>
       <y>20</y>
       <width>81</width>
       <height>17</height>
      </rect>
     </property>
     <property name="text">
-     <string>Agent host:</string>
+     <string>1st agent host:</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
     </property>
    </widget>
    <widget class="QGroupBox" name="groupBox_4">
     <property name="geometry">
      <rect>
       <x>300</x>
-      <y>50</y>
+      <y>80</y>
       <width>231</width>
       <height>171</height>
      </rect>
@@ -211,7 +214,7 @@ QGroupBox::title {
       </rect>
      </property>
      <property name="text">
-      <string>RTnet slave:</string>
+      <string>RTnet slave(s):</string>
      </property>
     </widget>
     <widget class="QLabel" name="label_4">
@@ -325,9 +328,9 @@ QGroupBox::title {
     <property name="geometry">
      <rect>
       <x>50</x>
-      <y>240</y>
+      <y>260</y>
       <width>481</width>
-      <height>221</height>
+      <height>201</height>
      </rect>
     </property>
    </widget>
@@ -358,6 +361,51 @@ QGroupBox::title {
     </property>
     <property name="text">
      <string>Exit</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="agent_host2">
+    <property name="enabled">
+     <bool>false</bool>
+    </property>
+    <property name="geometry">
+     <rect>
+      <x>131</x>
+      <y>45</y>
+      <width>151</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>pcl-tdc</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_6">
+    <property name="geometry">
+     <rect>
+      <x>47</x>
+      <y>50</y>
+      <width>81</width>
+      <height>17</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>2nd agent host:</string>
+    </property>
+    <property name="alignment">
+     <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+    </property>
+   </widget>
+   <widget class="QCheckBox" name="en_2nd">
+    <property name="geometry">
+     <rect>
+      <x>290</x>
+      <y>48</y>
+      <width>121</width>
+      <height>21</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Enable 2nd agent</string>
     </property>
    </widget>
   </widget>

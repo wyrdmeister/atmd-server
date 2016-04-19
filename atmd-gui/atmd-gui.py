@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """
 
 ATMD Server Control GUI
 
-Copyright (C) Michele Devetta 2013 <michele.devetta@gmail.com>
+Copyright (C) Michele Devetta 2016 <michele.devetta@gmail.com>
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -29,12 +29,12 @@ import time
 from select import select
 from PyQt4 import QtCore
 from PyQt4 import QtGui
-from ui.Ui_MainWindow import Ui_MainWindow
+from ui.Ui_atmd_gui import Ui_AtmdGUI
 from ui.Ui_savemeasure import Ui_savemeasure
 from ui.Ui_dtcalculator import Ui_dtcalculator
 
 
-class ATMDGui(QtGui.QMainWindow, Ui_MainWindow):
+class ATMDGui(QtGui.QMainWindow, Ui_AtmdGUI):
     """ Main window of ATMD-GPX client
     """
 
