@@ -23,7 +23,6 @@ with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 import time
-import shlex
 
 try:
     from subprocess import check_output
@@ -96,7 +95,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """ Display an error message
         """
         QtGui.QMessageBox.warning(self, title, message)
-lex
+
     @QtCore.pyqtSlot(QtCore.QTimerEvent)
     def timerEvent(self, event):
         """ Timer event handler
