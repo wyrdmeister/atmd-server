@@ -53,6 +53,10 @@ except ImportError as e:
         print("ERROR: cannot safely proceed without an implementation of quote()")
         exit(0)
 
+# Check Qt API version
+import sip
+if sip.getapi('QString') == 1:
+    sip.setapi('QString', 2)
 
 # Import PyQt
 from PyQt4 import QtCore
