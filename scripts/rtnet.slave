@@ -47,35 +47,6 @@ EN_CAP="no"
 PREFIX="/usr/local/rtnet"
 
 
-# Check which configuration we should use
-if [ "x$2" = "x" -o "x$2" = "x0" ]; then
-	# Defaults to single configuration
-	SLOT_START=$SLOT_START_S
-	SLOT_END=$SLOT_END_S
-	IP=$IP_1
-	echo " = Starting in single agent configuration..."
-
-elif [ "x$2" = "x1" ]; then
-	SLOT_START=$SLOT_START_1
-	SLOT_END=$SLOT_END_1
-	IP=$IP_1
-	echo " = Starting in multiple agent configuration (first agent)..."
-
-elif [ "x$2" = "x2" ]; then
-	SLOT_START=$SLOT_START_2
-	SLOT_END=$SLOT_END_2
-	IP=$IP_2
-	echo " = Starting in multiple agent configuration (second agent)..."
-
-else
-	echo " = Bad agent configuration option ($2). Cannot continue."
-	exit 1
-fi
-
-# Compute the number of slots
-NUM_SLOTS=$(( ($SLOT_END - $SLOT_START) / ($SLOT_OFFSET) ))
-
-
 TDMACFG="${PREFIX}/sbin/tdmacfg"
 RTIFCONFIG="${PREFIX}/sbin/rtifconfig"
 RTROUTE="${PREFIX}/sbin/rtroute"
@@ -114,6 +85,35 @@ init_rtnet() {
 
 case "$1" in
   start)
+
+    # Check which configuration we should use
+    if [ "x$2" = "x" -o "x$2" = "x0" ]; then
+      # Defaults to single configuration
+      SLOT_START=$SLOT_START_S
+      SLOT_END=$SLOT_END_S
+      IP=$IP_1
+      echo " = Starting in single agent configuration..."
+
+    elif [ "x$2" = "x1" ]; then
+      SLOT_START=$SLOT_START_1
+      SLOT_END=$SLOT_END_1
+      IP=$IP_1
+      echo " = Starting in multiple agent configuration (first agent)..."
+
+    elif [ "x$2" = "x2" ]; then
+      SLOT_START=$SLOT_START_2
+      SLOT_END=$SLOT_END_2
+      IP=$IP_2
+      echo " = Starting in multiple agent configuration (second agent)..."
+
+    else
+      echo " = Bad agent configuration option ($2). Cannot continue."
+      exit 1
+    fi
+
+    # Compute the number of slots
+    NUM_SLOTS=$(( ($SLOT_END - $SLOT_START) / ($SLOT_OFFSET) ))
+
     init_rtnet
     echo " = Adding routes..."
     $RTROUTE add $MASTER_IP $MASTER_MAC dev rteth0

@@ -39,29 +39,6 @@ EN_CAP="no"
 PREFIX="/usr/local/rtnet"
 
 
-# Check which configuration we should use
-if [ "x$2" = "x" -o "x$2" = "x1" ]; then
-	# Defaults to single configuration (remove second agent configuration...)
-	SLAVE_IP=(${SLAVE_IP[@]::1})
-	SLAVE_MAC=(${SLAVE_MAC[@]::1})
-	MASTER_SLOTS=(${MASTER_SLOTS[@]::1})
-	echo " = Starting in single agent configuration..."
-
-elif [ "x$2" = "x2" ]; then
-	echo " = Starting in multiple agent configuration..."
-
-else
-	echo " = Bad agent configuration option ($2). Cannot continue."
-	exit 1
-fi
-
-# Update ATMD-GPX server configuration
-sed -i "/^agent\|^#agent/d" ${ATMD_CONFIG}
-for agent in "${SLAVE_MAC[@]}"; do
-	echo "agent $agent" >> ${ATMD_CONFIG}
-done
-
-
 TDMACFG="${PREFIX}/sbin/tdmacfg"
 RTIFCONFIG="${PREFIX}/sbin/rtifconfig"
 RTROUTE="${PREFIX}/sbin/rtroute"
@@ -96,10 +73,33 @@ init_rtnet() {
   insmod $PREFIX/modules/rtmac.ko
   insmod $PREFIX/modules/tdma.ko
 }
-	
+
 
 case "$1" in
   start)
+
+    # Check which configuration we should use
+    if [ "x$2" = "x" -o "x$2" = "x1" ]; then
+      # Defaults to single configuration (remove second agent configuration...)
+      SLAVE_IP=(${SLAVE_IP[@]::1})
+      SLAVE_MAC=(${SLAVE_MAC[@]::1})
+      MASTER_SLOTS=(${MASTER_SLOTS[@]::1})
+      echo " = Starting in single agent configuration..."
+
+    elif [ "x$2" = "x2" ]; then
+      echo " = Starting in multiple agent configuration..."
+
+    else
+      echo " = Bad agent configuration option ($2). Cannot continue."
+      exit 1
+    fi
+
+    # Update ATMD-GPX server configuration
+    sed -i "/^agent\|^#agent/d" ${ATMD_CONFIG}
+    for agent in "${SLAVE_MAC[@]}"; do
+            echo "agent $agent" >> ${ATMD_CONFIG}
+    done
+
     init_rtnet
     echo " = Adding routes..."
     for i in  $(seq 0 $((${#SLAVE_IP[@]} - 1)))

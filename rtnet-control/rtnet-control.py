@@ -213,7 +213,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         try:
             self.command_output.appendPlainText(" => Starting RTnet slave on {0:}:".format(host))
-            out = check_output('ssh root@{0:} "rtnet.slave start {0:}"'.format(quote(host), agent), shell=True)
+            out = check_output('ssh root@{0:} "rtnet.slave start {1:d}"'.format(quote(host), agent), shell=True)
             self.command_output.appendPlainText(out)
             self.command_output.appendPlainText(" => Checking packet delay:")
             out = check_output('ssh root@{0:} "dmesg | grep \'TDMA: calibrated\' | tail -n 1"'.format(quote(host)), shell=True)
@@ -309,7 +309,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
                 if self.stop_rtnet_master():
                     self.error("Error stopping RTnet master")
 
-    def start_amtd_agent(self, host):
+    def start_atmd_agent(self, host):
         """ Start ATMD agent
         """
         try:
