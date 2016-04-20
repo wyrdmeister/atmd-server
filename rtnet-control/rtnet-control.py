@@ -373,7 +373,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """ Start ATMD-GPX system
         """
         self.command_output.setPlainText('')
-        if self.rtnet_master and self.rtnet_slave:
+        if self.rtnet_master and self.rtnet_slave1 and (self.en_2nd.isChecked() and self.rtnet_slave2):
             if not self.atmd_agent1 and not (self.en_2nd.isChecked() and self.atmd_agent2) and not self.atmd_server:
                 # Start first agent
                 if self.start_atmd_agent(self.agent_host1.text()) == 0:
