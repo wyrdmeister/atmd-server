@@ -10,7 +10,8 @@ NETDRV="e1000"
 #
 # IP configuration
 #
-IP="10.0.0.100"
+IP_1="10.0.0.100"
+IP_2="10.0.0.200"
 NETMASK="255.255.255.0"
 MASTER_IP="10.0.0.1"
 MASTER_MAC="00:1B:21:D3:08:35"
@@ -19,18 +20,21 @@ MASTER_MAC="00:1B:21:D3:08:35"
 # Cycles and slots
 #
 # Configuration with two acam boards.
-# Use slots from 100us to 2400us (slots from 2600us to 4900us will be used by the other board)
-#SLOT_START=100
-#SLOT_END=2400
+# Use slots from 100us to 2400us for the first board
+# Use slots from 2600us to 4900us for the second one
+SLOT_START_1=100
+SLOT_END_1=2400
+SLOT_START_2=2600
+SLOT_END_2=4900
 
 # Configuration with one acam board.
 # Use slots from 100us to 4900us
-SLOT_START=100
-SLOT_END=4900
+SLOT_START_S=100
+SLOT_END_S=4900
 
 # Slot offset is common to both configurations
 SLOT_OFFSET=100
-NUM_SLOTS=$(( ($SLOT_END - $SLOT_START) / ($SLOT_OFFSET) ))
+
 
 #
 # Enable capture
@@ -41,6 +45,35 @@ EN_CAP="no"
 # RTNET location
 #
 PREFIX="/usr/local/rtnet"
+
+
+# Check which configuration we should use
+if [ "x$2" = "x" -o "x$2" = "x0" ]; then
+	# Defaults to single configuration
+	SLOT_START=$SLOT_START_S
+	SLOT_END=$SLOT_END_S
+	IP=$IP_1
+	echo " = Starting in single agent configuration..."
+
+elif [ "x$2" = "x1" ]; then
+	SLOT_START=$SLOT_START_1
+	SLOT_END=$SLOT_END_1
+	IP=$IP_1
+	echo " = Starting in multiple agent configuration (first agent)..."
+
+elif [ "x$2" = "x2" ]; then
+	SLOT_START=$SLOT_START_2
+	SLOT_END=$SLOT_END_2
+	IP=$IP_2
+	echo " = Starting in multiple agent configuration (second agent)..."
+
+else
+	echo " = Bad agent configuration option ($2). Cannot continue."
+	exit 1
+fi
+
+# Compute the number of slots
+NUM_SLOTS=$(( ($SLOT_END - $SLOT_START) / ($SLOT_OFFSET) ))
 
 
 TDMACFG="${PREFIX}/sbin/tdmacfg"

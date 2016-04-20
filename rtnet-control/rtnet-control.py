@@ -110,43 +110,50 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.rtnet_master = (out != '')
         except CalledProcessError as e:
             self.rtnet_master = False
-            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
+            if not (e.returncode == 256 and e.output == ''):
+                print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
         try:
             out = check_output('ps -e | grep atmd_server', shell=True)
             self.atmd_server = (out != '')
         except CalledProcessError as e:
             self.atmd_server = False
-            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
+            if not (e.returncode == 256 and e.output == ''):
+                print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        try:
-            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(quote(self.agent_host1.text())), shell=True)
-            self.rtnet_slave1 = (out != '')
-        except CalledProcessError as e:
-            self.rtnet_slave1 = False
-            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
+        if not self.agent_host1.hasFocus():
+            try:
+                out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(quote(self.agent_host1.text())), shell=True)
+                self.rtnet_slave1 = (out != '')
+            except CalledProcessError as e:
+                self.rtnet_slave1 = False
+                if not (e.returncode == 256 and e.output == ''):
+                    print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        try:
-            out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(quote(self.agent_host1.text())), shell=True)
-            self.atmd_agent1 = (out != '')
-        except CalledProcessError as e:
-            self.atmd_agent1 = False
-            print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
+            try:
+                out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(quote(self.agent_host1.text())), shell=True)
+                self.atmd_agent1 = (out != '')
+            except CalledProcessError as e:
+                self.atmd_agent1 = False
+                if not (e.returncode == 256 and e.output == ''):
+                    print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
-        if self.en_2nd.isChecked():
+        if self.en_2nd.isChecked() and not self.agent_host2.hasFocus():
             try:
                 out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/protocol_devices | grep PACKET_DGRAM"'.format(quote(self.agent_host2.text())), shell=True)
                 self.rtnet_slave2 = (out != '')
             except CalledProcessError as e:
                 self.rtnet_slave2 = False
-                print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
+                if not (e.returncode == 256 and e.output == ''):
+                    print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
 
             try:
                 out = check_output('ssh root@{0:} "ps -e | grep atmd-agent"'.format(quote(self.agent_host2.text())), shell=True)
                 self.atmd_agent2 = (out != '')
             except CalledProcessError as e:
                 self.atmd_agent2 = False
-                print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
+                if not (e.returncode == 256 and e.output == ''):
+                    print ("Error: [{0:}] {1:}".format(e.returncode, e.output))
         else:
             self.rtnet_slave2 = True
             self.atmd_agent2 = True
@@ -198,22 +205,22 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
-            self.command_output.appendPlainText(e.output)
+            self.command_output.appendPlainText("ERROR[{0:d}] {1:}".format(e.returncode, e.output))
             return e.returncode
 
-    def start_rtnet_slave(self, host, agents):
+    def start_rtnet_slave(self, host, agent):
         """ Start RTNet slave
         """
         try:
             self.command_output.appendPlainText(" => Starting RTnet slave on {0:}:".format(host))
-            out = check_output('ssh root@{0:} "rtnet.slave start {0:}"'.format(quote(host), agents), shell=True)
+            out = check_output('ssh root@{0:} "rtnet.slave start {0:}"'.format(quote(host), agent), shell=True)
             self.command_output.appendPlainText(out)
             self.command_output.appendPlainText(" => Checking packet delay:")
             out = check_output('ssh root@{0:} "dmesg | grep \'TDMA: calibrated\' | tail -n 1"'.format(quote(host)), shell=True)
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
-            self.command_output.appendPlainText(e.output)
+            self.command_output.appendPlainText("ERROR[{0:d}] {1:}".format(e.returncode, e.output))
             return e.returncode
 
     def stop_rtnet_master(self):
@@ -225,7 +232,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
-            self.command_output.appendPlainText(e.output)
+            self.command_output.appendPlainText("ERROR[{0:d}] {1:}".format(e.returncode, e.output))
             return e.returncode
 
     def stop_rtnet_slave(self, host):
@@ -237,7 +244,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
-            self.command_output.appendPlainText(e.output)
+            self.command_output.appendPlainText("ERROR[{0:d}] {1:}".format(e.returncode, e.output))
             return e.returncode
 
     @QtCore.pyqtSlot()
@@ -253,7 +260,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         # Clean log
         self.command_output.setPlainText('')
 
-        if not self.rtnet_master and not self.rtnet_slave1 and not (self.en2nd.isChecked() and self.rtnet_slave2):
+        if not self.rtnet_master and not self.rtnet_slave1 and not (self.en_2nd.isChecked() and self.rtnet_slave2):
             # Start rtnet master
             if self.start_rtnet_master(agents) == 0:
                 # Wait for the master to settle...
@@ -284,7 +291,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         Stop RTNet
         """
         self.command_output.setPlainText('')
-        if self.atmd_agent or self.atmd_server:
+        if self.atmd_agent1 or (self.en_2nd.isChecked() and self.atmd_agent2) or self.atmd_server:
             self.error("Cannot stop RTnet with the ATMD-GPX server running.")
         else:
             # Stop rtnet
@@ -307,7 +314,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
-            self.command_output.appendPlainText(e.output)
+            self.command_output.appendPlainText("ERROR[{0:d}] {1:}".format(e.returncode, e.output))
             return e.returncode
 
     def start_atmd_server(self):
@@ -319,7 +326,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.command_output.appendPlainText(out)
             return 0
         except CalledProcessError as e:
-            self.command_output.appendPlainText(e.output)
+            self.command_output.appendPlainText("ERROR[{0:d}] {1:}".format(e.returncode, e.output))
             return e.returncode
 
     def stop_atmd_agent(self, host):
@@ -363,7 +370,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
         """
         self.command_output.setPlainText('')
         if self.rtnet_master and self.rtnet_slave:
-            if not self.atmd_agent1 and not (self.en2nd.isChecked() and self.atmd_agent2) and not self.atmd_server:
+            if not self.atmd_agent1 and not (self.en_2nd.isChecked() and self.atmd_agent2) and not self.atmd_server:
                 # Start first agent
                 if self.start_atmd_agent(self.agent_host1.text()) == 0:
                     # Success. Start second agent if needed
