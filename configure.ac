@@ -98,5 +98,6 @@ if test yes = "$en_agent"; then
 fi
 
 AC_SUBST([TARGETS])
+AC_MSG_NOTICE([ => Building targets: ${TARGETS}])
 
 AC_OUTPUT([Makefile src/Makefile])
