@@ -39,14 +39,6 @@ EN_CAP="no"
 PREFIX="/usr/local/rtnet"
 
 
-fuction update_atmd_config {
-	# $1: configuration file
-	# $2: agents mac addresses
-
-	mapfile -t TEST < <(grep '^agent\|^#agent' $1)
-
-}
-
 # Check which configuration we should use
 if [ "x$2" = "x" -o "x$2" = "x1" ]; then
 	# Defaults to single configuration (remove second agent configuration...)
@@ -68,6 +60,7 @@ sed -i "/^agent\|^#agent/d" ${ATMD_CONFIG}
 for agent in "${SLAVE_MAC[@]}"; do
 	echo "agent $agent" >> ${ATMD_CONFIG}
 done
+
 
 TDMACFG="${PREFIX}/sbin/tdmacfg"
 RTIFCONFIG="${PREFIX}/sbin/rtifconfig"
