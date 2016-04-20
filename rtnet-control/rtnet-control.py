@@ -266,20 +266,24 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
                 # Wait for the master to settle...
                 time.sleep(5.0)
 
-                # Start first slave
-                if self.start_rtnet_slave(self.agent_host1.text(), agents) == 0:
-                    # Success. Start second slave if needed
-                    if self.en_2nd.isChecked():
-                        if self.start_rtnet_slave(self.agent_host2.text(), agents) == 0:
-                            # Success
-                            return
-                        else:
-                            self.error("Failed to start RTNet slave on {0:}".format(self.agent_host2.text()))
-                            self.stop_rtnet_slave(self.agent_host2.text())
-                            self.stop_rtnet_master()
+                if agents == 1:
+                    # Single agent
+                    if self.start_rtnet_slave(self.agent_host1.text(), agents):
+                        # Error
+                        self.stop_rtnet_master()
+                        self.error("Failed to start RTNet slave on {0:}".format(self.agent_host1.text()))
+
                 else:
-                    self.error("Failed to start RTNet slave on {0:}".format(self.agent_host1.text()))
-                    self.stop_rtnet_master()
+                    if self.start_rtnet_slave(self.agent_host1.text(), agents):
+                        # Error
+                        self.stop_rtnet_master()
+                        self.error("Failed to start RTNet slave on {0:}".format(self.agent_host1.text()))
+                    else:
+                        if self.start_rtnet_slave(self.agent_host2.text(), agents):
+                            # Error
+                            self.stop_rtnet_slave(self.agent_host1.text())
+                            self.stop_rtnet_master()
+                            self.error("Failed to start RTNet slave on {0:}".format(self.agent_host2.text()))
             else:
                 self.error("Failed to start RTNet master")
         else:
