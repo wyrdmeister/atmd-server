@@ -268,18 +268,18 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
 
                 if agents == 1:
                     # Single agent
-                    if self.start_rtnet_slave(self.agent_host1.text(), agents):
+                    if self.start_rtnet_slave(self.agent_host1.text(), 0):
                         # Error
                         self.stop_rtnet_master()
                         self.error("Failed to start RTNet slave on {0:}".format(self.agent_host1.text()))
 
                 else:
-                    if self.start_rtnet_slave(self.agent_host1.text(), agents):
+                    if self.start_rtnet_slave(self.agent_host1.text(), 1):
                         # Error
                         self.stop_rtnet_master()
                         self.error("Failed to start RTNet slave on {0:}".format(self.agent_host1.text()))
                     else:
-                        if self.start_rtnet_slave(self.agent_host2.text(), agents):
+                        if self.start_rtnet_slave(self.agent_host2.text(), 2):
                             # Error
                             self.stop_rtnet_slave(self.agent_host1.text())
                             self.stop_rtnet_master()
