@@ -54,8 +54,9 @@ except ImportError as e:
         exit(0)
 
 # Check Qt API version
-import sip
-if sip.getapi('QString') == 1:
+import sys
+if sys.version_info[0] < 3:
+    import sip
     sip.setapi('QString', 2)
 
 # Import PyQt
