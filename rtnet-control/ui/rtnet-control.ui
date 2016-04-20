@@ -140,7 +140,7 @@ QGroupBox::title {
      </rect>
     </property>
     <property name="text">
-     <string>pcl-tdc</string>
+     <string>192.168.0.100</string>
     </property>
    </widget>
    <widget class="QLabel" name="label">
@@ -376,7 +376,7 @@ QGroupBox::title {
      </rect>
     </property>
     <property name="text">
-     <string>pcl-tdc</string>
+     <string>192.168.0.200</string>
     </property>
    </widget>
    <widget class="QLabel" name="label_6">
