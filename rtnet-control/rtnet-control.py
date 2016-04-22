@@ -169,12 +169,23 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.status_rtnet_master.setText('Stopped')
             self.status_rtnet_master.setStyleSheet('QLabel { color: #C80000; }')
 
-        if self.rtnet_slave1 and self.rtnet_slave2:
-            self.status_rtnet_slave.setText('Running')
-            self.status_rtnet_slave.setStyleSheet('QLabel { color: #006600; }')
+        if self.rtnet_slave1:
+            self.status_rtnet_slave1.setText('Running')
+            self.status_rtnet_slave1.setStyleSheet('QLabel { color: #006600; }')
         else:
-            self.status_rtnet_slave.setText('Stopped')
-            self.status_rtnet_slave.setStyleSheet('QLabel { color: #C80000; }')
+            self.status_rtnet_slave1.setText('Stopped')
+            self.status_rtnet_slave1.setStyleSheet('QLabel { color: #C80000; }')
+
+        if not self.en_2nd.isChecked():
+            self.status_rtnet_slave2.setText('Disabled')
+            self.status_rtnet_slave2.setStyleSheet('QLabel { color: #666666; }')
+        elif self.rtnet_slave2:
+            self.status_rtnet_slave2.setText('Running')
+            self.status_rtnet_slave2.setStyleSheet('QLabel { color: #006600; }')
+        else:
+            self.status_rtnet_slave2.setText('Stopped')
+            self.status_rtnet_slave2.setStyleSheet('QLabel { color: #C80000; }')
+
 
         if self.atmd_server:
             self.status_atmd_server.setText('Running')
@@ -183,12 +194,22 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             self.status_atmd_server.setText('Stopped')
             self.status_atmd_server.setStyleSheet('QLabel { color: #C80000; }')
 
-        if self.atmd_agent1 and self.atmd_agent2:
-            self.status_atmd_agent.setText('Running')
-            self.status_atmd_agent.setStyleSheet('QLabel { color: #006600; }')
+        if self.atmd_agent1:
+            self.status_atmd_agent1.setText('Running')
+            self.status_atmd_agent1.setStyleSheet('QLabel { color: #006600; }')
         else:
-            self.status_atmd_agent.setText('Stopped')
-            self.status_atmd_agent.setStyleSheet('QLabel { color: #C80000; }')
+            self.status_atmd_agent1.setText('Stopped')
+            self.status_atmd_agent1.setStyleSheet('QLabel { color: #C80000; }')
+
+        if not self.en_2nd.isChecked():
+            self.status_atmd_agent2.setText('Disabled')
+            self.status_atmd_agent2.setStyleSheet('QLabel { color: #666666; }')
+        elif self.atmd_agent2:
+            self.status_atmd_agent2.setText('Running')
+            self.status_atmd_agent2.setStyleSheet('QLabel { color: #006600; }')
+        else:
+            self.status_atmd_agent2.setText('Stopped')
+            self.status_atmd_agent2.setStyleSheet('QLabel { color: #C80000; }')
 
         val = self.status_toggle.value()+25;
         if val > 100:
