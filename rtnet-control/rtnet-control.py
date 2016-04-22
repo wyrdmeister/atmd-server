@@ -362,7 +362,7 @@ class RTNetControl(QtGui.QMainWindow, Ui_rtnet_control):
             out = check_output('ssh root@{0:} "service atmd_agent stop"'.format(quote(host)), shell=True)
             self.command_output.appendPlainText(out)
             # Check RT file descriptors
-            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index" | awk \'{print $1}\''.format(quote(host)), shell=True)
+            out = check_output('ssh root@{0:} "cat /proc/xenomai/rtdm/open_fildes | grep -v ^Index" | awk \'{{print $1}}\''.format(quote(host)), shell=True)
             if out != '':
                 id = map(int, out.split('\n'))
                 out = check_output('ssh root@{0:} "term_rtdev {1:d} {2:d}"'.format(host, min(id), max(id)), shell=True)
